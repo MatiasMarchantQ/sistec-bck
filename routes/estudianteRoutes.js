@@ -5,7 +5,8 @@ import {
   obtenerEstudiantes,
   crearEstudiante,
   actualizarEstudiante,
-  eliminarEstudiante
+  eliminarEstudiante,
+  actualizarEstudiantesMasivo
 } from '../controllers/estudianteController.js';
 
 const router = express.Router();
@@ -13,6 +14,7 @@ const router = express.Router();
 router.post('/carga-masiva', cargarEstudiantes);
 router.get('/', obtenerEstudiantes);
 router.post('/', crearEstudiante);
+router.put('/edicion-masiva', actualizarEstudiantesMasivo);
 router.put('/:id', actualizarEstudiante);
 router.delete('/:id', eliminarEstudiante);
 

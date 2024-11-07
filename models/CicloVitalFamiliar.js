@@ -1,4 +1,4 @@
-// src/models/CicloVitalFamiliar.js
+// models/CicloVitalFamiliar.js
 import { Model, DataTypes } from 'sequelize';
 import sequelize from './index.js';
 

@@ -5,6 +5,7 @@ import PacienteNino from './PacienteNino.js';
 import Estudiante from './Estudiante.js';
 import Institucion from './Institucion.js';
 import RelacionDpmDsm from './RelacionDpmDsm.js';
+import Usuario from './Usuario.js';
 
 class FichaClinicaInfantil extends Model {}
 
@@ -47,10 +48,18 @@ FichaClinicaInfantil.init({
   estudiante_id: {
     type: DataTypes.INTEGER,
     references: {
-      model: Estudiante ,
+      model: Estudiante,
       key: 'id'
     },
-    allowNull: false
+    allowNull: true 
+  },
+  usuario_id: {
+    type: DataTypes.INTEGER,
+    references: {
+      model: Usuario,
+      key: 'id'
+    },
+    allowNull: true
   },
   institucion_id: {
     type: DataTypes.INTEGER,
@@ -71,5 +80,6 @@ FichaClinicaInfantil.belongsTo(PacienteNino, { foreignKey: 'paciente_id' });
 FichaClinicaInfantil.belongsTo(Estudiante, { foreignKey: 'estudiante_id' });
 FichaClinicaInfantil.belongsTo(Institucion, { foreignKey: 'institucion_id' });
 FichaClinicaInfantil.belongsTo(RelacionDpmDsm, { foreignKey: 'puntaje_dpm' });
+FichaClinicaInfantil.belongsTo(Usuario, { foreignKey: 'usuario_id' }); // Nueva relación
 
 export default FichaClinicaInfantil;

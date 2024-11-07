@@ -42,8 +42,7 @@ export const obtenerPersonal = async (req, res) => {
         exclude: ['contrasena', 'refresh_token'] 
       },
       limit: parseInt(limit),
-      offset: offset,
-      logging: console.log
+      offset: offset
     });
 
     res.json({
@@ -119,7 +118,7 @@ export const actualizarPersonal = async (req, res) => {
     }
 
     // Verificar que el usuario a modificar tenga rol 1 o 2
-    if (![1, 2].includes(usuario.rol_id)) {
+    if (![1, 2, 3].includes(usuario.rol_id)) {
       return res.status(403).json({ error: 'No puedes modificar este usuario' });
     }
 

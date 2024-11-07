@@ -3,58 +3,70 @@ import Institucion from '../models/Institucion.js';
 import TipoInstitucion from '../models/TipoInstitucion.js';
 import Receptor from '../models/Receptor.js';
 import { Op } from 'sequelize';
-
 export const obtenerInstituciones = async (req, res) => {
   const { page = 1, limit = 10, tipo, search, estado = 'activas' } = req.query;
 
   try {
     const offset = (page - 1) * limit;
-    const whereClause = {};
+    let whereClause = {};
 
+    // Configurar estado
     if (estado === 'activas') {
       whereClause.estado = true;
     } else if (estado === 'inactivas') {
       whereClause.estado = false;
     }
 
+    // Configurar tipo si existe
     if (tipo) {
       whereClause.tipo_id = tipo;
     }
 
+    // Agregar condición de búsqueda si existe
     if (search) {
-      whereClause[Op.or] = [
-        { nombre: { [Op.like]: `%${search}%` } },
-        { receptora: { [Op.like]: `%${search}%` } }
-      ];
+      whereClause = {
+        ...whereClause,
+        nombre: { [Op.like]: `%${search}%` }
+      };
     }
 
-    const { count, rows } = await Institucion.findAndCountAll({
-        where: whereClause,
-        include: [
-          {
-            model: TipoInstitucion,
-            attributes: ['id', 'tipo']
-          },
-          {
-            model: Receptor,
-            as: 'receptores',  // Asegúrate de que este alias coincida
-            attributes: ['id', 'nombre', 'cargo']
-          }
-        ],
-        limit: parseInt(limit),
-        offset: offset,
-        order: [
-          [{ model: TipoInstitucion }, 'tipo', 'ASC']
-        ]
-      });
+    let queryOptions = {
+      where: whereClause,
+      include: [
+        {
+          model: TipoInstitucion,
+          attributes: ['id', 'tipo']
+        },
+        {
+          model: Receptor,
+          as: 'receptores',
+          attributes: ['id', 'nombre', 'cargo'],
+          required: false
+        }
+      ],
+      distinct: true,
+      limit: parseInt(limit),
+      offset: offset,
+      order: [
+        [{ model: TipoInstitucion }, 'tipo', 'ASC']
+      ]
+    };
 
-    res.json({
+    const { count, rows } = await Institucion.findAndCountAll(queryOptions);
+
+    return res.json({
       instituciones: rows,
-      total: count
+      total: count,
+      totalPages: Math.ceil(count / limit),
+      currentPage: parseInt(page)
     });
+
   } catch (error) {
-    console.error('Error al obtener instituciones:', error);
-    res.status(500).json({ error: 'Error al obtener las instituciones' });
+    console.error('Error detallado:', error);
+    return res.status(500).json({ 
+      error: 'Error al obtener las instituciones',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };
 

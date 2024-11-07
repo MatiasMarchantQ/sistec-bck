@@ -46,7 +46,7 @@ Estudiante.init({
     defaultValue: 1
   },
   anos_cursados: {
-    type: DataTypes.STRING(100)
+    type: DataTypes.STRING
   },
   semestre: {
     type: DataTypes.INTEGER,
@@ -59,6 +59,10 @@ Estudiante.init({
       model: Rol,
       key: 'id'
     }
+  },
+  refresh_token: {
+    type: DataTypes.STRING,
+    allowNull: true
   }
 }, {
   sequelize,

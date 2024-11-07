@@ -5,17 +5,21 @@ import {
   obtenerRoles,
   obtenerTiposInstituciones,
   obtenerInstitucionesPorTipo,
-  obtenerReceptoresPorInstitucion
+  obtenerReceptoresPorInstitucion,
+  obtenerNivelesEscolaridad,
+  obtenerCiclosVitalesFamiliares,
+  obtenerTiposFamilia
 } from '../controllers/obtenerController.js';
 
 const router = express.Router();
 
 router.get('/roles', verifyToken, obtenerRoles);
 router.get('/tipos-instituciones', verifyToken, obtenerTiposInstituciones);
-router.get('/instituciones', obtenerInstitucionesPorTipo);
-router.get('/receptores', obtenerReceptoresPorInstitucion);
+router.get('/instituciones', verifyToken, obtenerInstitucionesPorTipo);
+router.get('/receptores', verifyToken, obtenerReceptoresPorInstitucion);
+router.get('/niveles-escolaridad', verifyToken, obtenerNivelesEscolaridad);
+router.get('/ciclos-vitales-familiares', verifyToken, obtenerCiclosVitalesFamiliares);
+router.get('/tipos-familia', verifyToken, obtenerTiposFamilia);
 
-// router.get('/usuarios-por-rol/:rolId', verifyToken, obtenerUsuariosPorRol);
-// router.get('/estadisticas', verifyToken, obtenerEstadisticas);
 
 export default router;

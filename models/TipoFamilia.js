@@ -1,4 +1,4 @@
-// src/models/TipoFamilia.js
+// models/TipoFamilia.js
 import { Model, DataTypes } from 'sequelize';
 import sequelize from './index.js';
 
@@ -10,8 +10,8 @@ TipoFamilia.init({
     primaryKey: true,
     autoIncrement: true
   },
-  tipo: {
-    type: DataTypes.STRING(50),
+  nombre: {
+    type: DataTypes.STRING(100),
     allowNull: false,
     unique: true
   }
