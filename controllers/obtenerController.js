@@ -3,10 +3,13 @@ import Usuario from '../models/Usuario.js';
 import Rol from '../models/Rol.js';
 import Receptor from '../models/Receptor.js';
 import TipoInstitucion from '../models/TipoInstitucion.js';
-import Institucion from '../models/Institucion.js'; // Agregar esta importación
+import Institucion from '../models/Institucion.js';
 import NivelEscolaridad from '../models/NivelEscolaridad.js';
 import CicloVitalFamiliar from '../models/CicloVitalFamiliar.js';
 import TipoFamilia from '../models/TipoFamilia.js';
+import FactorRiesgoNino from '../models/FactorRiesgoNino.js';
+import FactorRiesgoFamiliar from '../models/FactorRiesgoFamiliar.js';
+
 
 // Obtener todos los roles
 export const obtenerRoles = async (req, res) => {
@@ -105,5 +108,33 @@ export const obtenerTiposFamilia = async (req, res) => {
   } catch (error) {
     console.error('Error al obtener tipos de familia:', error);
     res.status(500).json({ error: 'Error al obtener los tipos de familia' });
+  }
+};
+
+// Obtener factores de riesgo del niño
+export const obtenerFactoresRiesgoNino = async (req, res) => {
+  try {
+    const factores = await FactorRiesgoNino.findAll({
+      attributes: ['id', 'nombre', 'descripcion'],
+      order: [['id', 'ASC']]
+    });
+    res.json(factores);
+  } catch (error) {
+    console.error('Error al obtener factores de riesgo del niño:', error);
+    res.status(500).json({ error: 'Error al obtener los factores de riesgo del niño' });
+  }
+};
+
+// Obtener factores de riesgo familiar
+export const obtenerFactoresRiesgoFamiliar = async (req, res) => {
+  try {
+    const factores = await FactorRiesgoFamiliar.findAll({
+      attributes: ['id', 'nombre', 'descripcion'],
+      order: [['id', 'ASC']]
+    });
+    res.json(factores);
+  } catch (error) {
+    console.error('Error al obtener factores de riesgo familiar:', error);
+    res.status(500).json({ error: 'Error al obtener los factores de riesgo familiar' });
   }
 };

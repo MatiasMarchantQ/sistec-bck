@@ -1,12 +1,10 @@
-// src/models/PadreTutor.js
+// models/PadreTutor.js
 import { Model, DataTypes } from 'sequelize';
 import sequelize from './index.js';
 import FichaClinicaInfantil from './FichaClinicaInfantil.js';
 import NivelEscolaridad from './NivelEscolaridad.js';
 
-class PadreTutor extends Model {}
-
-PadreTutor.init({
+const PadreTutor = sequelize.define('PadreTutor', {
   id: {
     type: DataTypes.INTEGER,
     primaryKey: true,
@@ -14,35 +12,39 @@ PadreTutor.init({
   },
   ficha_clinica_id: {
     type: DataTypes.INTEGER,
+    allowNull: false,
     references: {
       model: FichaClinicaInfantil,
       key: 'id'
-    },
-    allowNull: false
+    }
   },
   nombre: {
-    type: DataTypes.STRING(200),
+    type: DataTypes.STRING,
     allowNull: false
   },
   escolaridad_id: {
-    type : DataTypes.INTEGER,
+    type: DataTypes.INTEGER,
+    allowNull: true,
     references: {
       model: NivelEscolaridad,
       key: 'id'
     }
   },
   ocupacion: {
-    type: DataTypes.STRING(100),
+    type: DataTypes.STRING,
     allowNull: true
   }
 }, {
-  sequelize,
-  modelName: 'PadreTutor',
   tableName: 'padres_tutores',
-  timestamps: false
+  timestamps: true,
+  underscored: true
 });
 
+// Asociaciones
 PadreTutor.belongsTo(FichaClinicaInfantil, { foreignKey: 'ficha_clinica_id' });
-PadreTutor.belongsTo(NivelEscolaridad, { foreignKey: 'escolaridad_id' });
+PadreTutor.belongsTo(NivelEscolaridad, { 
+  foreignKey: 'escolaridad_id',
+  as: 'nivelEscolaridad' 
+});
 
 export default PadreTutor;

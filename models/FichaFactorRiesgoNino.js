@@ -30,18 +30,18 @@ const FichaFactorRiesgoNino = sequelize.define('FichaFactorRiesgoNino', {
   timestamps: true
 });
 
-// Definir las relaciones
 FichaClinicaInfantil.belongsToMany(FactorRiesgoNino, {
   through: FichaFactorRiesgoNino,
   foreignKey: 'ficha_clinica_id',
   otherKey: 'factor_riesgo_nino_id',
-  as: 'factoresRiesgoNino'
+  as: 'factoresRiesgoNinoInfantil'
 });
 
 FactorRiesgoNino.belongsToMany(FichaClinicaInfantil, {
   through: FichaFactorRiesgoNino,
   foreignKey: 'factor_riesgo_nino_id',
-  otherKey: 'ficha_clinica_id'
+  otherKey: 'ficha_clinica_id',
+  as: 'fichasClinicasInfantil'
 });
 
 export default FichaFactorRiesgoNino;

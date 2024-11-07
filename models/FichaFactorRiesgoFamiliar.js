@@ -24,23 +24,28 @@ const FichaFactorRiesgoFamiliar = sequelize.define('FichaFactorRiesgoFamiliar', 
       model: FactorRiesgoFamiliar,
       key: 'id'
     }
+  },
+  otras: {
+    type: DataTypes.TEXT,
+    allowNull: true
   }
 }, {
   tableName: 'ficha_factor_riesgo_familiar',
   timestamps: true
 });
 
-// Definir las relaciones
 FichaClinicaInfantil.belongsToMany(FactorRiesgoFamiliar, {
   through: FichaFactorRiesgoFamiliar,
-  foreignKey: 'ficha_clinica_id', otherKey: 'factor_riesgo_familiar_id',
-  as: 'factoresRiesgoFamiliar'
+  foreignKey: 'ficha_clinica_id',
+  otherKey: 'factor_riesgo_familiar_id',
+  as: 'factoresRiesgoFamiliarInfantil'
 });
 
 FactorRiesgoFamiliar.belongsToMany(FichaClinicaInfantil, {
   through: FichaFactorRiesgoFamiliar,
   foreignKey: 'factor_riesgo_familiar_id',
-  otherKey: 'ficha_clinica_id'
+  otherKey: 'ficha_clinica_id',
+  as: 'fichasClinicasInfantil'
 });
 
 export default FichaFactorRiesgoFamiliar;

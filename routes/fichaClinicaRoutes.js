@@ -12,8 +12,8 @@ router.post('/adulto', verifyToken, createFichaClinicaAdulto);
 router.get('/adulto/:id', verifyToken, getFichaClinica);
 router.put('/adulto/:id', verifyToken, updateFichaClinica);
 
-router.post('/infantil', createFichaClinicaInfantil);
-router.get('/infantil/:id', getFichaClinicaInfantil);
-router.put('/infantil/:id', updateFichaClinicaInfantil);
+router.post('/infantil', verifyToken, createFichaClinicaInfantil);
+router.get('/infantil/:id', verifyToken, getFichaClinicaInfantil);
+router.put('/infantil/:id', verifyToken, updateFichaClinicaInfantil);
 
 export default router;

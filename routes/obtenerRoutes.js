@@ -8,7 +8,9 @@ import {
   obtenerReceptoresPorInstitucion,
   obtenerNivelesEscolaridad,
   obtenerCiclosVitalesFamiliares,
-  obtenerTiposFamilia
+  obtenerTiposFamilia,
+  obtenerFactoresRiesgoNino,
+  obtenerFactoresRiesgoFamiliar
 } from '../controllers/obtenerController.js';
 
 const router = express.Router();
@@ -20,6 +22,8 @@ router.get('/receptores', verifyToken, obtenerReceptoresPorInstitucion);
 router.get('/niveles-escolaridad', verifyToken, obtenerNivelesEscolaridad);
 router.get('/ciclos-vitales-familiares', verifyToken, obtenerCiclosVitalesFamiliares);
 router.get('/tipos-familia', verifyToken, obtenerTiposFamilia);
+router.get('/factores-riesgo-nino', verifyToken, obtenerFactoresRiesgoNino);
+router.get('/factores-riesgo-familiar', verifyToken, obtenerFactoresRiesgoFamiliar);
 
 
 export default router;
