@@ -1,10 +1,16 @@
 import PacienteAdulto from '../models/PacienteAdulto.js';
 import FichaClinicaAdulto from '../models/FichaClinicaAdulto.js';
+import PacienteInfantil from '../models/PacienteInfantil.js';
+import FichaClinicaInfantil from '../models/FichaClinicaInfantil.js';
 import NivelEscolaridad from '../models/NivelEscolaridad.js';
 import CicloVitalFamiliar from '../models/CicloVitalFamiliar.js';
 import TipoFamilia from '../models/TipoFamilia.js';
 import FichaCicloVital from '../models/FichaCicloVital.js';  // Añade esta línea
 import FichaTipoFamilia from '../models/FichaTipoFamilia.js';  // Añade esta línea si no está
+import FactorRiesgoNino from '../models/FactorRiesgoNino.js';
+import FactorRiesgoFamiliar from '../models/FactorRiesgoFamiliar.js';
+import FichaFactorRiesgoNino from '../models/FichaFactorRiesgoNino.js';
+import FichaFactorRiesgoFamiliar from '../models/FichaFactorRiesgoFamiliar.js';
 import sequelize from '../models/index.js';
 
 // En tu controlador de fichas clínicas
@@ -234,6 +240,276 @@ export const createFichaClinicaAdulto = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Error al crear la ficha clínica',
+            error: error.message
+        });
+    }
+};
+
+export const createFichaClinicaInfantil = async (req, res) => {
+    const t = await sequelize.transaction();
+
+    try {
+        const {
+            fechaNacimiento,
+            nombres,
+            apellidos,
+            rut,
+            edad,
+            telefonoPrincipal,
+            telefonoSecundario,
+            puntajeDPM,
+            diagnosticoDSM,
+            padres,
+            conQuienVive,
+            tipoFamilia,
+            cicloVitalFamiliar,
+            localidad,
+            factoresRiesgoNino,
+            factoresRiesgoFamiliares,
+            estudiante_id,
+            usuario_id,
+            institucion_id
+        } = req.body;
+
+        // Validación de IDs
+        if (!estudiante_id && !usuario_id) {
+            return res.status(400).json({
+                success: false,
+                message: 'Se requiere al menos un ID (estudiante o usuario) para crear la ficha clínica'
+            });
+        }
+
+        // Crear o actualizar paciente
+        const [paciente, created] = await PacienteInfantil.findOrCreate({
+            where: { rut },
+            defaults: {
+                nombres,
+                apellidos,
+                fecha_nacimiento: fechaNacimiento,
+                edad,
+                telefono_principal: telefonoPrincipal,
+                telefono_secundario: telefonoSecundario
+            },
+            transaction: t
+        });
+
+        if (!created) {
+            await paciente.update({
+                nombres,
+                apellidos,
+                fecha_nacimiento: fechaNacimiento,
+                edad,
+                telefono_principal: telefonoPrincipal,
+                telefono_secundario: telefonoSecundario
+            }, { transaction: t });
+        }
+
+        // Crear la ficha clínica infantil
+        const fichaClinica = await FichaClinicaInfantil.create({
+            paciente_id: paciente.id,
+            puntaje_dpm: puntajeDPM,
+            diagnostico_dsm: diagnosticoDSM,
+            con_quien_vive: conQuienVive,
+            localidad,
+            estudiante_id: estudiante_id || null,
+            usuario_id: usuario_id || null,
+            institucion_id
+        }, { transaction: t });
+
+        // Asociar ciclo vital familiar
+        if (cicloVitalFamiliar) {
+            const cicloVital = await CicloVitalFamiliar.findByPk(cicloVitalFamiliar, { transaction: t });
+            if (cicloVital) {
+                await FichaCicloVital.create({
+                    ficha_clinica_id: fichaClinica.id,
+                    ciclo_vital_familiar_id: cicloVital.id,
+                    tipo_ficha: 'infantil'
+                }, { transaction: t });
+            }
+        }
+
+        // Asociar tipo de familia
+        if (tipoFamilia) {
+            const tipoFamiliaInstance = await TipoFamilia.findByPk(tipoFamilia, { transaction: t });
+            if (tipoFamiliaInstance) {
+                await FichaTipoFamilia.create({
+                    ficha_clinica_id: fichaClinica.id,
+                    tipo_familia_id: tipoFamiliaInstance.id,
+                    tipo_ficha: 'infantil'
+                }, { transaction: t });
+            }
+        }
+
+        // Asociar factores de riesgo del niño
+        for (const factor in factoresRiesgoNino) {
+            if (factoresRiesgoNino[factor]) {
+                const factorRiesgo = await FactorRiesgoNino.findOne({ where: { nombre: factor }, transaction: t });
+                if (factorRiesgo) {
+                    await FichaFactorRiesgoNino.create({
+                        ficha_clinica_id: fichaClinica.id,
+                        factor_riesgo_nino_id: factorRiesgo.id
+                    }, { transaction: t });
+                }
+            }
+        }
+
+        // Asociar factores de riesgo familiares
+        for (const factor in factoresRiesgoFamiliares) {
+            if (factoresRiesgoFamiliares[factor]) {
+                const factorRiesgo = await FactorRiesgoFamiliar.findOne({ where: { nombre: factor }, transaction: t });
+                if (factorRiesgo) {
+                    await FichaFactorRiesgoFamiliar.create({
+                        ficha_clinica_id: fichaClinica.id,
+                        factor_riesgo_familiar_id: factorRiesgo.id
+                    }, { transaction: t });
+                }
+            }
+        }
+
+        // Guardar información de los padres
+        // Aquí deberías crear un modelo para los padres y asociarlo con la ficha clínica
+
+        await t.commit();
+
+        res.status(201).json({
+            success: true,
+            message: 'Ficha clínica infantil creada exitosamente',
+            data: {
+                fichaClinica,
+                paciente
+            }
+        });
+
+    } catch (error) {
+        await t.rollback();
+        console.error('Error al crear ficha clínica infantil:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error al crear la ficha clínica infantil',
+            error: error.message
+        });
+    }
+};
+
+export const getFichaClinicaInfantil = async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const fichaClinica = await FichaClinicaInfantil.findByPk(id, {
+            include: [
+                {
+                    model: PacienteInfantil,
+                    attributes: ['id', 'nombres', 'apellidos', 'rut', 'edad', 'telefono_principal', 'telefono_secundario']
+                },
+                {
+                    model: CicloVitalFamiliar,
+                    through: FichaCicloVital,
+                    as: 'cicloVitalFamiliar'
+                },
+                {
+                    model: TipoFamilia,
+                    through: FichaTipoFamilia,
+                    as: 'tipoFamilia'
+                },
+                {
+                    model: FactorRiesgoNino,
+                    through: FichaFactorRiesgoNino,
+                    as: 'factoresRiesgoNino'
+                },
+                {
+                    model: FactorRiesgoFamiliar,
+                    through: FichaFactorRiesgoFamiliar,
+                    as: 'factoresRiesgoFamiliares'
+                }
+            ]
+        });
+
+        if (!fichaClinica) {
+            return res.status(404).json({
+                success: false,
+                message: 'Ficha clínica infantil no encontrada'
+            });
+        }
+
+        res.json({
+            success: true,
+            data: fichaClinica
+        });
+
+    } catch (error) {
+        console.error('Error al obtener ficha clínica infantil:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error al obtener la ficha clínica infantil',
+            error: error.message
+        });
+    }
+};
+
+export const updateFichaClinicaInfantil = async (req, res) => {
+    const t = await sequelize.transaction();
+
+    try {
+        const { id } = req.params;
+        const updateData = req.body;
+
+        const fichaClinica = await FichaClinicaInfantil.findByPk(id);
+        if (!fichaClinica) {
+            await t.rollback();
+            return res.status(404).json({
+                success: false,
+                message: 'Ficha clínica infantil no encontrada'
+            });
+        }
+
+        // Actualizar la ficha clínica
+        await fichaClinica.update(updateData, { transaction: t });
+
+        // Actualizar factores de riesgo del niño
+        if (updateData.factoresRiesgoNino) {
+            await FichaFactorRiesgoNino.destroy({ where: { ficha_clinica_id: id }, transaction: t });
+            for (const factor in updateData.factoresRiesgoNino) {
+                if (updateData.factoresRiesgoNino[factor]) {
+                    const factorRiesgo = await FactorRiesgoNino.findOne({ where: { nombre: factor }, transaction: t });
+                    if (factorRiesgo) {
+                        await FichaFactorRiesgoNino.create({
+                            ficha_clinica_id: fichaClinica.id,
+                            factor_riesgo_nino_id: factorRiesgo.id
+                        }, { transaction: t });
+                    }
+                }
+            }
+        }
+
+        // Actualizar factores de riesgo familiares
+        if (updateData.factoresRiesgoFamiliares) {
+            await FichaFactorRiesgoFamiliar.destroy({ where: { ficha_clinica_id: id }, transaction: t });
+            for (const factor in updateData.factoresRiesgoFamiliares) {
+                if (updateData.factoresRiesgoFamiliares[factor]) {
+                    const factorRiesgo = await FactorRiesgoFamiliar.findOne({ where: { nombre: factor }, transaction: t });
+                    if (factorRiesgo) {
+                        await FichaFactorRiesgoFamiliar.create({
+                            ficha_clinica_id: fichaClinica.id,
+                            factor_riesgo_familiar_id: factorRiesgo.id
+                        }, { transaction: t });
+                    }
+                }
+            }
+        }
+
+        await t.commit();
+
+        res.json({
+            success: true,
+            message: 'Ficha clínica infantil actualizada exitosamente',
+            data: fichaClinica
+        });
+
+    } catch (error) {
+        await t.rollback();
+        res.status(500).json({
+            success: false,
+            message: 'Error al actualizar la ficha clínica infantil',
             error: error.message
         });
     }

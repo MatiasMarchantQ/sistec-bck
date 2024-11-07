@@ -1,47 +1,24 @@
-// src/models/FactorRiesgoNino.js
 import { Model, DataTypes } from 'sequelize';
 import sequelize from './index.js';
-import FichaClinicaInfantil from './FichaClinicaInfantil.js';
 
-class FactorRiesgoNino extends Model {}
-
-FactorRiesgoNino.init({
+const FactorRiesgoNino = sequelize.define('FactorRiesgoNino', {
   id: {
     type: DataTypes.INTEGER,
     primaryKey: true,
     autoIncrement: true
   },
-  ficha_clinica_id: {
-    type: DataTypes.INTEGER,
-    references: {
-      model: FichaClinicaInfantil,
-      key: 'id'
-    },
-    allowNull: false
+  nombre: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    unique: true
   },
-  prematurez: {
-    type: DataTypes.BOOLEAN,
-    defaultValue: false
-  },
-  desnutricion: {
-    type: DataTypes.BOOLEAN,
-    defaultValue: false
-  },
-  enfermedades_cronicas: {
-    type: DataTypes.BOOLEAN,
-    defaultValue: false
-  },
-  neurodivergencia: {
-    type: DataTypes.BOOLEAN,
-    defaultValue: false
+  descripcion: {
+    type: DataTypes.STRING,
+    allowNull: true
   }
 }, {
-  sequelize,
-  modelName: 'FactorRiesgoNino',
   tableName: 'factores_riesgo_nino',
-  timestamps: false
+  timestamps: true
 });
-
-FactorRiesgoNino.belongsTo(FichaClinicaInfantil, { foreignKey: 'ficha_clinica_id' });
 
 export default FactorRiesgoNino;

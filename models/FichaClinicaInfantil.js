@@ -1,15 +1,8 @@
-// src/models/FichaClinicaInfantil.js
 import { Model, DataTypes } from 'sequelize';
 import sequelize from './index.js';
-import PacienteNino from './PacienteNino.js';
-import Estudiante from './Estudiante.js';
-import Institucion from './Institucion.js';
-import RelacionDpmDsm from './RelacionDpmDsm.js';
-import Usuario from './Usuario.js';
+import PacienteInfantil from './PacienteInfantil.js';
 
-class FichaClinicaInfantil extends Model {}
-
-FichaClinicaInfantil.init({
+const FichaClinicaInfantil = sequelize.define('FichaClinicaInfantil', {
   id: {
     type: DataTypes.INTEGER,
     primaryKey: true,
@@ -17,69 +10,45 @@ FichaClinicaInfantil.init({
   },
   paciente_id: {
     type: DataTypes.INTEGER,
+    allowNull: false,
     references: {
-      model: PacienteNino,
+      model: PacienteInfantil,
       key: 'id'
-    },
-    allowNull: false
-  },
-  fecha_evaluacion: {
-    type: DataTypes.DATE,
-    allowNull: false
-  },
-  tipo_evaluacion: {
-    type: DataTypes.ENUM('INICIAL', 'REEVALUACION'),
-    allowNull: false
+    }
   },
   puntaje_dpm: {
-    type: DataTypes.STRING(50),
-    references: {
-      model: RelacionDpmDsm,
-      key: 'puntaje_dpm'
-    }
+    type: DataTypes.STRING,
+    allowNull: true
   },
   diagnostico_dsm: {
-    type: DataTypes.STRING(100),
-    references: {
-      model: RelacionDpmDsm,
-      key: 'diagnostico_dsm'
-    }
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  con_quien_vive: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  localidad: {
+    type: DataTypes.STRING,
+    allowNull: true
   },
   estudiante_id: {
     type: DataTypes.INTEGER,
-    references: {
-      model: Estudiante,
-      key: 'id'
-    },
-    allowNull: true 
+    allowNull: true
   },
   usuario_id: {
     type: DataTypes.INTEGER,
-    references: {
-      model: Usuario,
-      key: 'id'
-    },
     allowNull: true
   },
   institucion_id: {
     type: DataTypes.INTEGER,
-    references: {
-      model: Institucion,
-      key: 'id'
-    },
     allowNull: false
   }
 }, {
-  sequelize,
-  modelName: 'FichaClinicaInfantil',
   tableName: 'fichas_clinicas_infantiles',
-  timestamps: false
+  timestamps: true
 });
 
-FichaClinicaInfantil.belongsTo(PacienteNino, { foreignKey: 'paciente_id' });
-FichaClinicaInfantil.belongsTo(Estudiante, { foreignKey: 'estudiante_id' });
-FichaClinicaInfantil.belongsTo(Institucion, { foreignKey: 'institucion_id' });
-FichaClinicaInfantil.belongsTo(RelacionDpmDsm, { foreignKey: 'puntaje_dpm' });
-FichaClinicaInfantil.belongsTo(Usuario, { foreignKey: 'usuario_id' }); // Nueva relación
+FichaClinicaInfantil.belongsTo(PacienteInfantil, { foreignKey: 'paciente_id' });
 
 export default FichaClinicaInfantil;
