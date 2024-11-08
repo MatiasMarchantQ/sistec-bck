@@ -12,7 +12,10 @@ import FactorRiesgoFamiliar from '../models/FactorRiesgoFamiliar.js';
 import FichaFactorRiesgoNino from '../models/FichaFactorRiesgoNino.js';
 import FichaFactorRiesgoFamiliar from '../models/FichaFactorRiesgoFamiliar.js';
 import PadreTutor from '../models/PadreTutor.js';
+import TipoInstitucion from '../models/TipoInstitucion.js';
+import Institucion from '../models/Institucion.js';
 import sequelize from '../models/index.js';
+import { Op } from 'sequelize';
 
 export const getFichasClinicasPorInstitucion = async (req, res) => {
     try {
@@ -871,9 +874,114 @@ export const updateFichaClinica = async (req, res) => {
         });
     }
 };
+export const obtenerFichasClinicas = async (req, res) => {
+    try {
+        const { 
+            tipoInstitucion, 
+            institucion, 
+            textoBusqueda, 
+            tipoFicha, 
+            pagina = 1, 
+            limite = 10 
+        } = req.query;
 
-export default {
-    createFichaClinicaAdulto,
-    getFichaClinica,
-    updateFichaClinica
+        // Condiciones base
+        const whereConditions = {};
+        const pacienteWhereConditions = {};
+        const includeConditions = [];
+
+        // Manejo de tipos de ficha
+        let modelos = [];
+        if (!tipoFicha || tipoFicha === '') {
+            // Si no hay filtro, buscar en ambos modelos
+            modelos = [
+                { modelo: FichaClinicaAdulto, pacienteModelo: PacienteAdulto },
+                { modelo: FichaClinicaInfantil, pacienteModelo: PacienteInfantil }
+            ];
+        } else if (tipoFicha === 'adulto') {
+            modelos = [{ modelo: FichaClinicaAdulto, pacienteModelo: PacienteAdulto }];
+        } else if (tipoFicha === 'infantil') {
+            modelos = [{ modelo: FichaClinicaInfantil, pacienteModelo: PacienteInfantil }];
+        }
+
+        // Filtro por institución (si se proporciona)
+        if (institucion) {
+            whereConditions.institucion_id = parseInt(institucion);
+        }
+
+        // Búsqueda de texto flexible
+        const textConditions = textoBusqueda 
+            ? {
+                [Op.or]: [
+                    sequelize.where(
+                        sequelize.fn('LOWER', sequelize.col('nombres')), 
+                        'LIKE', 
+                        `%${textoBusqueda.toLowerCase()}%`
+                    ),
+                    sequelize.where(
+                        sequelize.fn('LOWER', sequelize.col('apellidos')), 
+                        'LIKE', 
+                        `%${textoBusqueda.toLowerCase()}%`
+                    ),
+                    sequelize.where(
+                        sequelize.fn('LOWER', sequelize.col('rut')), 
+                        'LIKE', 
+                        `%${textoBusqueda.toLowerCase()}%`
+                    )
+                ]
+            }
+            : {};
+
+        // Configurar paginación
+        const offset = (parseInt(pagina) - 1) * parseInt(limite);
+
+        // Realizar consulta con múltiples modelos
+        const resultados = await Promise.all(
+            modelos.map(async ({ modelo, pacienteModelo }) => {
+                return await modelo.findAndCountAll({
+                    where: whereConditions,
+                    include: [
+                        {
+                            model: pacienteModelo,
+                            where: {
+                                ...textConditions
+                            },
+                            required: true
+                        },
+                        {
+                            model: Institucion,
+                            include: [TipoInstitucion],
+                            where: tipoInstitucion 
+                                ? { tipo_id: parseInt(tipoInstitucion) } 
+                                : {}
+                        }
+                    ],
+                    order: [['createdAt', 'DESC']],
+                    limit: parseInt(limite),
+                    offset: offset,
+                    distinct: true
+                });
+            })
+        );
+
+        // Combinar resultados
+        const fichas = resultados.flatMap(resultado => resultado.rows);
+        const total = resultados.reduce((sum, resultado) => sum + resultado.count, 0);
+
+        res.json({
+            success: true,
+            total: total,
+            pagina: parseInt(pagina),
+            limite: parseInt(limite),
+            fichas: fichas
+        });
+
+    } catch (error) {
+        console.error('Error detallado al obtener fichas clínicas:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Error al obtener las fichas clínicas', 
+            error: error.message 
+        });
+    }
 };

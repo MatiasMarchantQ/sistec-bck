@@ -15,6 +15,8 @@ import FactorRiesgoFamiliar from './FactorRiesgoFamiliar.js';
 import FichaFactorRiesgoNino from './FichaFactorRiesgoNino.js';
 import FichaFactorRiesgoFamiliar from './FichaFactorRiesgoFamiliar.js';
 import PadreTutor from './PadreTutor.js';
+import PacienteInfantil from './PacienteInfantil.js';
+import SeguimientoInfantil from './SeguimientoInfantil.js';
 import NivelEscolaridad from './NivelEscolaridad.js';
 
 export function setupAssociations() {
@@ -123,4 +125,16 @@ export function setupAssociations() {
       foreignKey: 'ficha_clinica_id'
   });
 
+  FichaClinicaInfantil.belongsTo(Institucion, { foreignKey: 'institucion_id' });
+  Institucion.hasMany(FichaClinicaInfantil, { foreignKey: 'institucion_id' });
+
+  PacienteInfantil.hasMany(SeguimientoInfantil, {
+    foreignKey: 'paciente_id',
+    as: 'seguimientos_infantiles'
+  });
+
+  SeguimientoInfantil.belongsTo(PacienteInfantil, {
+    foreignKey: 'paciente_id',
+    as: 'paciente_infantil'
+  });
 }

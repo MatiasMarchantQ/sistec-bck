@@ -1,6 +1,8 @@
 import { Model, DataTypes } from 'sequelize';
 import sequelize from './index.js';
 import PacienteInfantil from './PacienteInfantil.js';
+import Institucion from './Institucion.js';
+
 
 const FichaClinicaInfantil = sequelize.define('FichaClinicaInfantil', {
   id: {
@@ -50,5 +52,6 @@ const FichaClinicaInfantil = sequelize.define('FichaClinicaInfantil', {
 });
 
 FichaClinicaInfantil.belongsTo(PacienteInfantil, { foreignKey: 'paciente_id' });
+FichaClinicaInfantil.belongsTo(Institucion, { foreignKey: 'institucion_id' });
 
 export default FichaClinicaInfantil;
