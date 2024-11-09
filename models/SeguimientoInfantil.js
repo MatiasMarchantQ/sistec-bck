@@ -8,6 +8,10 @@ const SeguimientoInfantil = sequelize.define('SeguimientoInfantil', {
     primaryKey: true,
     autoIncrement: true
   },
+  numero_llamado:{
+    type: DataTypes.INTEGER,
+    allowNull: false
+  },
   paciente_id: {
     type: DataTypes.INTEGER,
     allowNull: false
@@ -21,75 +25,29 @@ const SeguimientoInfantil = sequelize.define('SeguimientoInfantil', {
     type: DataTypes.DATEONLY,
     allowNull: false
   },
-  edad_meses: {
-    type: DataTypes.INTEGER,
-    allowNull: false
-  },
   grupo_edad: {
     type: DataTypes.STRING,
     allowNull: true
   },
   area_motor_grueso: {
-    type: DataTypes.TEXT,
-    get() {
-      const rawValue = this.getDataValue('area_motor_grueso');
-      return rawValue ? JSON.parse(rawValue) : [];
-    },
-    set(value) {
-      this.setDataValue('area_motor_grueso', JSON.stringify(value));
-    }
+    type: DataTypes.TINYINT(1),
+    defaultValue: 0
   },
   area_motor_fino: {
-    type: DataTypes.TEXT,
-    get() {
-      const rawValue = this.getDataValue('area_motor_fino');
-      return rawValue ? JSON.parse(rawValue) : [];
-    },
-    set(value) {
-      this.setDataValue('area_motor_fino', JSON.stringify(value));
-    }
+    type: DataTypes.TINYINT(1),
+    defaultValue: 0
   },
   area_comunicacion: {
-    type: DataTypes.TEXT,
-    get() {
-      const rawValue = this.getDataValue('area_comunicacion');
-      return rawValue ? JSON.parse(rawValue) : [];
-    },
-    set(value) {
-      this.setDataValue('area_comunicacion', JSON.stringify(value));
-    }
+    type: DataTypes.TINYINT(1),
+    defaultValue: 0
   },
   area_cognoscitivo: {
-    type: DataTypes.TEXT,
-    get() {
-      const rawValue = this.getDataValue('area_cognoscitivo');
-      return rawValue ? JSON.parse(rawValue) : [];
-    },
-    set(value) {
-      this.setDataValue('area_cognoscitivo', JSON.stringify(value));
-    }
+    type: DataTypes.TINYINT(1),
+    defaultValue: 0
   },
   area_socioemocional: {
-    type: DataTypes.TEXT,
-    get() {
-      const rawValue = this.getDataValue('area_socioemocional');
-      return rawValue ? JSON.parse(rawValue) : [];
-    },
-    set(value) {
-      this.setDataValue('area_socioemocional', JSON.stringify(value));
-    }
-  },
-  recomendacion_motora: {
-    type: DataTypes.TEXT
-  },
-  recomendacion_lenguaje: {
-    type: DataTypes.TEXT
-  },
-  recomendacion_socioemocional: {
-    type: DataTypes.TEXT
-  },
-  recomendacion_cognitiva: {
-    type: DataTypes.TEXT
+    type: DataTypes.TINYINT(1),
+    defaultValue: 0
   }
 }, {
   tableName: 'seguimiento_infantil',
