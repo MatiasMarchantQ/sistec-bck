@@ -159,51 +159,129 @@ export const obtenerSeguimientosInfantiles = async (req, res) => {
 };
 
 export const crearSeguimientoAdulto = async (req, res) => {
-    try {
-      const datosFormateados = {
-        paciente_id: req.body.pacienteId,
-        ficha_id: req.body.fichaId,
-        numero_llamado: req.body.numeroLlamado,
-        fecha: req.body.fecha,
-        riesgo_infeccion: req.body.riesgoInfeccion || {},
-        riesgo_glicemia: req.body.riesgoGlicemia || {},
-        riesgo_hipertension: req.body.riesgoHipertension || {},
-        adherencia: req.body.adherencia || {},
-        adherencia_tratamiento: req.body.adherenciaTratamiento || {},
-        efectos_secundarios: req.body.efectosSecundarios || {},
-        nutricion: req.body.nutricion || {},
-        actividad_fisica: req.body.actividadFisica || {},
-        eliminacion: req.body.eliminacion || {},
-        sintomas_depresivos: req.body.sintomasDepresivos || '',
-        autoeficacia: req.body.autoeficacia || {},
-        otros_sintomas: req.body.otrosSintomas || ''
-      };
-  
-      const nuevoSeguimiento = await SeguimientoAdulto.create(datosFormateados);
-      res.status(201).json(nuevoSeguimiento);
-    } catch (error) {
-      console.error('Error al crear seguimiento de adulto:', error);
-      res.status(500).json({ 
-        error: 'Error al crear seguimiento de adulto',
-        detalle: error.message 
+  try {
+    const { 
+      pacienteId, 
+      numeroLlamado,
+      fecha,
+      riesgoInfeccion,
+      riesgoGlicemia,
+      riesgoHipertension,
+      adherencia,
+      adherenciaTratamiento,
+      efectosSecundarios,
+      nutricion,
+      actividadFisica,
+      eliminacion,
+      sintomasDepresivos,
+      autoeficacia,
+      otrosSintomas
+    } = req.body;
+
+    // Buscar seguimiento existente
+    let seguimientoExistente = await SeguimientoAdulto.findOne({
+      where: { 
+        paciente_id: pacienteId, 
+        numero_llamado: numeroLlamado
+      }
+    });
+
+    // Preparar datos formateados
+    const datosFormateados = {
+      paciente_id: pacienteId,
+      numero_llamado: numeroLlamado,
+      fecha: fecha || new Date().toISOString(),
+      riesgo_infeccion: riesgoInfeccion || {},
+      riesgo_glicemia: riesgoGlicemia || {},
+      riesgo_hipertension: riesgoHipertension || {},
+      adherencia: adherencia || {},
+      adherencia_tratamiento: adherenciaTratamiento || {},
+      efectos_secundarios: efectosSecundarios || {},
+      nutricion: nutricion || {},
+      actividad_fisica: actividadFisica || {},
+      eliminacion: eliminacion || {},
+      sintomas_depresivos: sintomasDepresivos || '',
+      autoeficacia: autoeficacia || {},
+      otros_sintomas: otrosSintomas || ''
+    };
+
+    let resultado;
+
+    if (seguimientoExistente) {
+      // Actualizar solo los campos proporcionados
+      resultado = await seguimientoExistente.update(
+        Object.fromEntries(
+          Object.entries(datosFormateados).filter(([_, v]) => 
+            v !== null && v !== undefined && 
+            (typeof v !== 'object' || Object.keys(v).length > 0)
+          )
+        )
+      );
+    } else {
+      // Crear nuevo seguimiento
+      resultado = await SeguimientoAdulto.create(datosFormateados);
+    }
+
+    res.status(seguimientoExistente ? 200 : 201).json(resultado);
+  } catch (error) {
+    console.error('Error al procesar seguimiento de adulto:', error);
+    
+    // Manejo de errores de validación de Sequelize
+    if (error.name === 'SequelizeValidationError') {
+      return res.status(400).json({
+        error: 'Error de validación',
+        detalles: error.errors.map(e => e.message)
       });
     }
-  };
-  
-  export const obtenerSeguimientosAdulto = async (req, res) => {
-    try {
-      const { pacienteId } = req.params;
-      const seguimientos = await SeguimientoAdulto.findAll({
-        where: { paciente_id: pacienteId },
-        order: [['fecha', 'DESC']]
-      });
-      res.status(200).json(seguimientos);
-    } catch (error) {
-      console.error('Error al obtener seguimientos de adulto:', error);
-      res.status(500).json({ 
-        error: 'Error al obtener seguimientos de adulto',
-        detalle: error.message 
+
+    // Manejo de errores de unicidad
+    if (error.name === 'SequelizeUniqueConstraintError') {
+      return res.status(409).json({
+        error: 'Conflicto de datos',
+        detalles: error.errors.map(e => e.message)
       });
     }
-  };
-  
+
+    res.status(500).json({ 
+      error: 'Error al procesar seguimiento de adulto',
+      detalle: error.message 
+    });
+  }
+};
+
+// Controlador para obtener seguimientos
+export const obtenerSeguimientosAdulto = async (req, res) => {
+  try {
+    const { pacienteId } = req.params;
+    
+    // Validar que se proporcione pacienteId
+    if (!pacienteId) {
+      return res.status(400).json({ 
+        error: 'ID de paciente es requerido' 
+      });
+    }
+
+    const seguimientos = await SeguimientoAdulto.findAll({
+      where: { paciente_id: pacienteId },
+      order: [['fecha', 'DESC']],
+      attributes: { 
+        exclude: ['createdAt', 'updatedAt'] // Excluir timestamps si no son necesarios
+      }
+    });
+
+    // Manejar caso de no encontrar seguimientos
+    if (seguimientos.length === 0) {
+      return res.status(404).json({ 
+        mensaje: 'No se encontraron seguimientos para este paciente' 
+      });
+    }
+
+    res.status(200).json(seguimientos);
+  } catch (error) {
+    console.error('Error al obtener seguimientos de adulto:', error);
+    res.status(500).json({ 
+      error: 'Error al obtener seguimientos de adulto',
+      detalle: error.message 
+    });
+  }
+};

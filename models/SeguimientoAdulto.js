@@ -30,7 +30,6 @@ SeguimientoAdulto.init({
   es_llamado_final: {
     type: DataTypes.BOOLEAN,
     defaultValue: false,
-    comment: 'Indica si este es un llamado adicional después del tercer llamado'
   },
   fecha: {
     type: DataTypes.DATEONLY,
