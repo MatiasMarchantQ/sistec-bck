@@ -163,6 +163,7 @@ export const crearSeguimientoAdulto = async (req, res) => {
     const { 
       pacienteId, 
       numeroLlamado,
+      esLlamadoFinal, // Campo nuevo
       fecha,
       riesgoInfeccion,
       riesgoGlicemia,
@@ -175,7 +176,9 @@ export const crearSeguimientoAdulto = async (req, res) => {
       eliminacion,
       sintomasDepresivos,
       autoeficacia,
-      otrosSintomas
+      otrosSintomas,
+      manejoSintomas, // Campo nuevo
+      comentarios // Campo nuevo
     } = req.body;
 
     // Buscar seguimiento existente
@@ -190,6 +193,7 @@ export const crearSeguimientoAdulto = async (req, res) => {
     const datosFormateados = {
       paciente_id: pacienteId,
       numero_llamado: numeroLlamado,
+      es_llamado_final: esLlamadoFinal || false, // Campo nuevo
       fecha: fecha || new Date().toISOString(),
       riesgo_infeccion: riesgoInfeccion || {},
       riesgo_glicemia: riesgoGlicemia || {},
@@ -202,7 +206,9 @@ export const crearSeguimientoAdulto = async (req, res) => {
       eliminacion: eliminacion || {},
       sintomas_depresivos: sintomasDepresivos || '',
       autoeficacia: autoeficacia || {},
-      otros_sintomas: otrosSintomas || ''
+      otros_sintomas: otrosSintomas || '',
+      manejo_sintomas: manejoSintomas || {}, // Campo nuevo
+      comentarios: comentarios || '' // Campo nuevo
     };
 
     let resultado;
