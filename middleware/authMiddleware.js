@@ -1,6 +1,8 @@
 import jwt from 'jsonwebtoken';
 import Usuario from '../models/Usuario.js';
 import Estudiante from '../models/Estudiante.js';
+import dotenv from 'dotenv';
+dotenv.config();
 
 export const verifyToken = async (req, res, next) => {
   try {

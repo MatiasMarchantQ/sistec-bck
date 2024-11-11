@@ -24,7 +24,7 @@ SeguimientoAdulto.init({
     allowNull: false,
     validate: {
       min: 1,
-      max: 3
+      max: 6
     }
   },
   es_llamado_final: {

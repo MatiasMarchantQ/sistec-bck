@@ -139,7 +139,7 @@ export const obtenerSeguimientosInfantiles = async (req, res) => {
                 areaSocioemocional: seguimiento.recomendacion_socioemocional,
                 areaCognitiva: seguimiento.recomendacion_cognitiva
             },
-            numeroLlamado: seguimiento.numero_llamado // Añadir número de llamado
+            numeroLlamado: seguimiento.numero_llamado
         }));
 
         res.status(200).json({
@@ -162,8 +162,7 @@ export const crearSeguimientoAdulto = async (req, res) => {
   try {
     const { 
       pacienteId, 
-      numeroLlamado,
-      esLlamadoFinal, // Campo nuevo
+      esLlamadoFinal,
       fecha,
       riesgoInfeccion,
       riesgoGlicemia,
@@ -177,23 +176,24 @@ export const crearSeguimientoAdulto = async (req, res) => {
       sintomasDepresivos,
       autoeficacia,
       otrosSintomas,
-      manejoSintomas, // Campo nuevo
-      comentarios // Campo nuevo
+      manejoSintomas,
+      comentarios
     } = req.body;
 
-    // Buscar seguimiento existente
-    let seguimientoExistente = await SeguimientoAdulto.findOne({
-      where: { 
-        paciente_id: pacienteId, 
-        numero_llamado: numeroLlamado
-      }
+    // Buscar el último seguimiento del paciente para determinar el siguiente número de llamado
+    const ultimoSeguimiento = await SeguimientoAdulto.findOne({
+      where: { paciente_id: pacienteId },
+      order: [['numero_llamado', 'DESC']] // Ordenar por numero_llamado de forma descendente
     });
+
+    // Calcular el siguiente numeroLlamado
+    const numeroLlamado = ultimoSeguimiento ? ultimoSeguimiento.numero_llamado + 1 : 1; // Incrementar el número de llamado
 
     // Preparar datos formateados
     const datosFormateados = {
       paciente_id: pacienteId,
       numero_llamado: numeroLlamado,
-      es_llamado_final: esLlamadoFinal || false, // Campo nuevo
+      es_llamado_final: esLlamadoFinal || false,
       fecha: fecha || new Date().toISOString(),
       riesgo_infeccion: riesgoInfeccion || {},
       riesgo_glicemia: riesgoGlicemia || {},
@@ -207,28 +207,14 @@ export const crearSeguimientoAdulto = async (req, res) => {
       sintomas_depresivos: sintomasDepresivos || '',
       autoeficacia: autoeficacia || {},
       otros_sintomas: otrosSintomas || '',
-      manejo_sintomas: manejoSintomas || {}, // Campo nuevo
-      comentarios: comentarios || '' // Campo nuevo
+      manejo_sintomas: manejoSintomas || '',
+      comentarios: comentarios || ''
     };
 
-    let resultado;
+    // Crear nuevo seguimiento
+    const nuevoSeguimiento = await SeguimientoAdulto.create(datosFormateados);
 
-    if (seguimientoExistente) {
-      // Actualizar solo los campos proporcionados
-      resultado = await seguimientoExistente.update(
-        Object.fromEntries(
-          Object.entries(datosFormateados).filter(([_, v]) => 
-            v !== null && v !== undefined && 
-            (typeof v !== 'object' || Object.keys(v).length > 0)
-          )
-        )
-      );
-    } else {
-      // Crear nuevo seguimiento
-      resultado = await SeguimientoAdulto.create(datosFormateados);
-    }
-
-    res.status(seguimientoExistente ? 200 : 201).json(resultado);
+    res.status(201).json(nuevoSeguimiento);
   } catch (error) {
     console.error('Error al procesar seguimiento de adulto:', error);
     
@@ -269,9 +255,9 @@ export const obtenerSeguimientosAdulto = async (req, res) => {
 
     const seguimientos = await SeguimientoAdulto.findAll({
       where: { paciente_id: pacienteId },
-      order: [['fecha', 'DESC']],
+      order: [['numero_llamado', 'DESC']],
       attributes: { 
-        exclude: ['createdAt', 'updatedAt'] // Excluir timestamps si no son necesarios
+        exclude: ['createdAt', 'updatedAt']
       }
     });
 
@@ -289,5 +275,38 @@ export const obtenerSeguimientosAdulto = async (req, res) => {
       error: 'Error al obtener seguimientos de adulto',
       detalle: error.message 
     });
+  }
+};
+
+// En tu archivo de controladores (seguimientosController.js)
+export const obtenerSeguimientoAdultoPorId = async (req, res) => {
+  try {
+      const { id } = req.params; // ID del seguimiento
+      const { pacienteId } = req.params; // Obtener el pacienteId de los parámetros de la URL
+
+      console.log(`Buscando seguimiento con ID: ${id} y pacienteId: ${pacienteId}`);
+
+      // Buscar el seguimiento por ID y pacienteId
+      const seguimiento = await SeguimientoAdulto.findOne({
+          where: {
+              id: parseInt(id, 10), // Asegúrate de que sea un número
+              paciente_id: parseInt(pacienteId, 10) // Asegúrate de que sea un número
+          }
+      });
+
+      if (!seguimiento) {
+          return res.status(404).json({ 
+              mensaje: `No se encontraron seguimientos para el paciente con ID ${pacienteId} y seguimiento ID ${id}` 
+          });
+      }
+
+      res.status(200).json(seguimiento);
+  } catch (error) {
+      console.error('Error al obtener seguimiento de adulto:', error);
+      res.status(500).json({ 
+          error: 'Error al obtener el seguimiento de adulto',
+          detalle: error.message,
+          stack: error.stack
+      });
   }
 };

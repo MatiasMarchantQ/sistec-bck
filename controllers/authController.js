@@ -7,7 +7,10 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import db from '../config/db.js';
 import { Sequelize } from 'sequelize';
-import { ROLES } from '../constants/roles.js'; // Importar los roles
+import { ROLES } from '../constants/roles.js';
+
+import dotenv from 'dotenv';
+dotenv.config();
 
 // Crear una instancia de Sequelize
 const sequelize = new Sequelize(db.database, db.user, db.password, {

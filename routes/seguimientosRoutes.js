@@ -6,7 +6,7 @@ import {
   obtenerSeguimientoInfantilPorId,
   crearSeguimientoAdulto, 
   obtenerSeguimientosAdulto,
-  // obtenerSeguimientoAdultoPorId
+  obtenerSeguimientoAdultoPorId
 } from '../controllers/seguimientosController.js';
 import { verifyToken } from '../middleware/authMiddleware.js';
 
@@ -20,6 +20,6 @@ router.get('/infantil/:id', verifyToken, obtenerSeguimientoInfantilPorId);
 // Rutas de seguimiento de adulto
 router.post('/adulto', verifyToken, crearSeguimientoAdulto);
 router.get('/adulto/:pacienteId', verifyToken, obtenerSeguimientosAdulto);
-// router.get('/adulto/detalle/:id', verifyToken, obtenerSeguimientoAdultoPorId);
+router.get('/adulto/:id/paciente/:pacienteId', verifyToken, obtenerSeguimientoAdultoPorId);
 
 export default router;
