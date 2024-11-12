@@ -258,7 +258,14 @@ export const obtenerSeguimientosAdulto = async (req, res) => {
       order: [['numero_llamado', 'DESC']],
       attributes: { 
         exclude: ['createdAt', 'updatedAt']
-      }
+      },
+      include: [
+        {
+          model: PacienteAdulto,
+          as: 'paciente_adulto',
+          attributes: ['rut', 'nombres', 'apellidos', 'edad', 'fecha_nacimiento', 'telefono_principal','telefono_secundario']
+        }
+      ]
     });
 
     // Manejar caso de no encontrar seguimientos
@@ -284,14 +291,19 @@ export const obtenerSeguimientoAdultoPorId = async (req, res) => {
       const { id } = req.params; // ID del seguimiento
       const { pacienteId } = req.params; // Obtener el pacienteId de los parámetros de la URL
 
-      console.log(`Buscando seguimiento con ID: ${id} y pacienteId: ${pacienteId}`);
-
       // Buscar el seguimiento por ID y pacienteId
       const seguimiento = await SeguimientoAdulto.findOne({
           where: {
               id: parseInt(id, 10), // Asegúrate de que sea un número
               paciente_id: parseInt(pacienteId, 10) // Asegúrate de que sea un número
-          }
+          },
+          include: [
+            {
+              model: PacienteAdulto,
+              as: 'paciente_adulto',
+              attributes: ['rut', 'nombres', 'apellidos', 'edad', 'fecha_nacimiento', 'telefono_principal','telefono_secundario']
+            }
+          ]
       });
 
       if (!seguimiento) {

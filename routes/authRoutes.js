@@ -7,7 +7,9 @@ import {
   login, 
   refreshToken,
   logout,
-  cambiarContrasena
+  cambiarContrasena,
+  actualizarUsuario,
+  getMe
 } from '../controllers/authController.js';
 import { verifyToken } from '../middleware/authMiddleware.js';
 
@@ -24,4 +26,7 @@ router.get('/usuarios', verifyToken, obtenerUsuarios);
 router.get('/usuarios/:id', verifyToken, obtenerUsuarioPorId);
 router.post('/usuarios', verifyToken, crearUsuario);
 
+router.get('/me', verifyToken, getMe);
+
+router.put('/usuarios/:id', verifyToken, actualizarUsuario);
 export default router;

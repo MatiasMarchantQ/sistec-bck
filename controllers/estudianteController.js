@@ -292,6 +292,26 @@ export const actualizarEstudiantesMasivo = async (req, res) => {
     }
   };
 
+  export const getMe = async (req, res) => {
+    try {
+      const userId = req.user.id; // Suponiendo que el middleware de verificación establece req.user
+      let usuario = await Usuario.findByPk(userId);
+      
+      if (!usuario) {
+        usuario = await Estudiante.findByPk(userId);
+      }
+  
+      if (!usuario) {
+        return res.status(404).json({ mensaje: 'Usuario no encontrado' });
+      }
+  
+      res.json(usuario);
+    } catch (error) {
+      console.error('Error al obtener usuario:', error);
+      res.status(500).json({ error: 'Error al obtener los datos del usuario' });
+    }
+  };
+  
 export const actualizarEstudiante = async (req, res) => {
     try {
       const { id } = req.params;

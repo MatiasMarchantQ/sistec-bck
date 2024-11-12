@@ -283,14 +283,6 @@ export const cambiarContrasena = async (req, res) => {
     const userRolId = req.user.rol_id;
     const debeCambiarContrasena = Boolean(req.user.debe_cambiar_contrasena);
 
-    console.log('Debug info inicial:', {
-      userId,
-      userRolId,
-      debeCambiarContrasena,
-      contrasenaActual,
-      nuevaContrasena
-    });
-
     let usuario;
     if (userRolId === ROLES.ESTUDIANTE) {
       usuario = await Estudiante.findByPk(userId);
@@ -330,11 +322,6 @@ export const cambiarContrasena = async (req, res) => {
     // Recargar el usuario para verificar los cambios
     await usuario.reload();
 
-    console.log('Usuario actualizado:', {
-      id: usuario.id,
-      debe_cambiar_contrasena: usuario.debe_cambiar_contrasena
-    });
-
     res.json({ 
       message: 'Contraseña actualizada exitosamente',
       debe_cambiar_contrasena: false
@@ -346,5 +333,65 @@ export const cambiarContrasena = async (req, res) => {
       error: 'Error al cambiar la contraseña',
       details: error.message
     });
+  }
+};
+
+export const getMe = async (req, res) => {
+  try {
+    const userId = req.user.id; // Suponiendo que el middleware de verificación establece req.user
+    let usuario = await Usuario.findByPk(userId);
+    
+    if (!usuario) {
+      usuario = await Estudiante.findByPk(userId);
+    }
+
+    if (!usuario) {
+      return res.status(404).json({ mensaje: 'Usuario no encontrado' });
+    }
+
+    res.json(usuario);
+  } catch (error) {
+    console.error('Error al obtener usuario:', error);
+    res.status(500).json({ error: 'Error al obtener los datos del usuario' });
+  }
+};
+
+// Controlador para actualizar datos del usuario
+// src/controllers/authController.js
+
+export const actualizarUsuario = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { nombres, apellidos, correo, rut } = req.body;
+
+    // Verificar si el usuario existe
+    let usuario = await Usuario.findByPk(id);
+    if (!usuario) {
+      usuario = await Estudiante.findByPk(id);
+    }
+
+    if (!usuario) {
+      return res.status(404).json({ mensaje: 'Usuario no encontrado' });
+    }
+
+    // Actualizar los datos
+    const updatedData = {
+      nombres,
+      apellidos,
+      correo,
+      rut
+    };
+
+    // Validar si el rol es estudiante o usuario
+    if (usuario.rol_id === ROLES.ESTUDIANTE) {
+      await Estudiante.update(updatedData, { where: { id } });
+    } else {
+      await Usuario.update(updatedData, { where: { id } });
+    }
+
+    res.json({ mensaje: 'Datos actualizados correctamente' });
+  } catch (error) {
+    console.error('Error al actualizar usuario:', error);
+    res.status(500).json({ error: 'Error al actualizar los datos' });
   }
 };
