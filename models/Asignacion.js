@@ -28,6 +28,10 @@ Asignacion.init ({
     },
     allowNull: false
   },
+  receptor_id: {
+    type: DataTypes.INTEGER,
+    allowNull: false
+  },
   fecha_inicio: {
     type: DataTypes.DATE,
     allowNull: false

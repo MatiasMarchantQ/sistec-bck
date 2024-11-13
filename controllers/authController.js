@@ -6,11 +6,13 @@ import Rol from '../models/Rol.js';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import db from '../config/db.js';
+import { enviarCorreoRecuperacion } from '../services/emailService.js';
 import { Sequelize } from 'sequelize';
 import { ROLES } from '../constants/roles.js';
 
 import dotenv from 'dotenv';
 dotenv.config();
+
 
 // Crear una instancia de Sequelize
 const sequelize = new Sequelize(db.database, db.user, db.password, {
@@ -393,5 +395,137 @@ export const actualizarUsuario = async (req, res) => {
   } catch (error) {
     console.error('Error al actualizar usuario:', error);
     res.status(500).json({ error: 'Error al actualizar los datos' });
+  }
+};
+
+//Recuperacion contraseña
+export const solicitarRecuperacionContrasena = async (req, res) => {
+  try {
+    // Verificar que el secreto existe
+    if (!process.env.JWT_RESET_SECRET) {
+      console.error('JWT_RESET_SECRET no está definido');
+      return res.status(500).json({ 
+        error: 'Error de configuración del servidor' 
+      });
+    }
+
+    const { email } = req.body;
+
+    // Buscar usuario en ambos modelos
+    let usuario = await Usuario.findOne({ 
+      where: { correo: email } 
+    });
+
+    if (!usuario) {
+      usuario = await Estudiante.findOne({
+        where: { correo: email }
+      });
+    }
+
+    if (!usuario) {
+      return res.status(404).json({ 
+        error: 'No se encontró un usuario con este correo electrónico' 
+      });
+    }
+
+    // Depuración: Verificar el secreto
+    console.log('JWT_RESET_SECRET:', process.env.JWT_RESET_SECRET);
+    console.log('JWT_RESET_SECRET length:', process.env.JWT_RESET_SECRET.length);
+
+    // Generar token de recuperación con JWT
+    const resetToken = jwt.sign(
+      { 
+        id: usuario.id, 
+        email: usuario.correo 
+      }, 
+      process.env.JWT_RESET_SECRET, 
+      { 
+        expiresIn: '1h' 
+      }
+    );
+
+    // Guardar token y fecha de expiración
+    usuario.reset_password_token = resetToken;
+    usuario.reset_password_expires = new Date(Date.now() + 3600000); // 1 hora
+    await usuario.save();
+
+    // Enviar correo de recuperación
+    await enviarCorreoRecuperacion(usuario.correo, resetToken);
+
+    res.status(200).json({ 
+      message: 'Se ha enviado un correo para restablecer la contraseña' 
+    });
+  } catch (error) {
+    console.error('Error en solicitud de recuperación:', error);
+    console.error('Detalles del error:', error.message);
+    res.status(500).json({ 
+      error: 'Error al procesar la solicitud de recuperación',
+      detalle: error.message
+    });
+  }
+};
+
+export const restablecerContrasena = async (req, res) => {
+  try {
+    const { token, nuevaContrasena } = req.body;
+
+    // Verificar token
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_RESET_SECRET);
+    } catch (error) {
+      return res.status(400).json({ 
+        error: 'Token inválido o expirado' 
+      });
+    }
+
+    // Buscar usuario en ambos modelos
+    let usuario = await Usuario.findOne({
+      where: {
+        id: decoded.id,
+        reset_password_token: token,
+        reset_password_expires: {
+          [Op.gt]: new Date() // Mayor que la fecha actual
+        }
+      }
+    });
+
+    if (!usuario) {
+      usuario = await Estudiante.findOne({
+        where: {
+          id: decoded.id,
+          reset_password_token: token,
+          reset_password_expires: {
+            [Op.gt]: new Date() // Mayor que la fecha actual
+          }
+        }
+      });
+    }
+
+    if (!usuario) {
+      return res.status(400).json({ 
+        error: 'Token inválido o expirado' 
+      });
+    }
+
+    // Generar nueva contraseña hasheada
+    const salt = await bcrypt.genSalt(10);
+    const nuevaContrasenaHash = await bcrypt.hash(nuevaContrasena, salt);
+
+    // Actualizar contraseña y limpiar token
+    usuario.contrasena = nuevaContrasenaHash;
+    usuario.reset_password_token = null;
+    usuario.reset_password_expires = null;
+    usuario.debe_cambiar_contrasena = false;
+    await usuario.save();
+
+    res.status(200).json({ 
+      message: 'Contraseña restablecida exitosamente' 
+    });
+  } catch (error) {
+    console.error('Error al restablecer contraseña:', error);
+    res.status(500).json({ 
+      error: 'Error al restablecer la contraseña' 
+    });
   }
 };

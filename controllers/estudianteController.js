@@ -176,65 +176,64 @@ export const actualizarEstudiantesMasivo = async (req, res) => {
   }
 };
 
-  export const obtenerEstudiantes = async (req, res) => {
-    try {
-      const { page = 1, limit = 10, search = '', ano = '', semestre = '', estado } = req.query;
-      const offset = (page - 1) * limit;
+export const obtenerEstudiantes = async (req, res) => {
+  try {
+    const { page = 1, limit = 10, search = '', ano = '', semestre = '', estado } = req.query;
+    const offset = (page - 1) * limit;
 
-      let whereClause = {};
+    let whereClause = {};
 
-      // Filtro por estado
-      if (estado === 'activos') {
-        whereClause.estado = true;
-      } else if (estado === 'inactivos') {
-        whereClause.estado = false;
-      }
-      // Si estado es 'todos' o no se proporciona, no se aplica filtro de estado
-
-      if (search) {
-        whereClause[Op.or] = [
-          { nombres: { [Op.like]: `%${search}%` } },
-          { apellidos: { [Op.like]: `%${search}%` } },
-          { rut: { [Op.like]: `%${search}%` } }
-        ];
-      }
-
-      if (ano) {
-        whereClause.anos_cursados = {
-          [Op.like]: `%${ano}%`
-        };
-      }
-
-      if (semestre) {
-        whereClause.semestre = semestre;
-      }
-
-      const { count, rows } = await Estudiante.findAndCountAll({
-        where: whereClause,
-        include: [{
-          model: Rol,
-          attributes: ['nombre']
-        }],
-        offset: Number(offset),
-        limit: Number(limit),
-        order: [['id', 'ASC']]
-      });
-
-      return res.json({
-        total: count,
-        estudiantes: rows,
-        totalPages: Math.ceil(count / limit),
-        currentPage: Number(page)
-      });
-
-    } catch (error) {
-      console.error('Error al obtener estudiantes:', error);
-      return res.status(500).json({ 
-        message: 'Error al obtener estudiantes', 
-        error: error.message 
-      });
+    // Filtro por estado
+    if (estado === 'activos') {
+      whereClause.estado = true;
+    } else if (estado === 'inactivos') {
+      whereClause.estado = false;
     }
-  };
+
+    if (search) {
+      whereClause[Op.or] = [
+        { nombres: { [Op.like]: `%${search}%` } },
+        { apellidos: { [Op.like]: `%${search}%` } },
+        { rut: { [Op.like]: `%${search}%` } }
+      ];
+    }
+
+    if (ano) {
+      whereClause.anos_cursados = {
+        [Op.like]: `%${ano}%`
+      };
+    }
+
+    if (semestre) {
+      whereClause.semestre = semestre;
+    }
+
+    const { count, rows } = await Estudiante.findAndCountAll({
+      where: whereClause,
+      include: [{
+        model: Rol,
+        attributes: ['nombre']
+      }],
+      offset: Number(offset),
+      limit: Number(limit),
+      order: [['id', 'ASC']]
+    });
+
+    return res.json({
+      total: count,
+      estudiantes: rows,
+      totalPages: Math.ceil(count / limit),
+      currentPage: Number(page)
+    });
+
+  } catch (error) {
+    console.error('Error al obtener estudiantes:', error);
+    return res.status(500).json({ 
+      message: 'Error al obtener estudiantes', 
+      error: error.message 
+    });
+  }
+};
 
   export const crearEstudiante = async (req, res) => {
     try {

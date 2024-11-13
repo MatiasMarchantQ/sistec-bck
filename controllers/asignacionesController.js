@@ -58,21 +58,52 @@ export const obtenerAsignaciones = async (req, res) => {
 // Crear una nueva asignación
 export const crearAsignacion = async (req, res) => {
   try {
-    const { estudiante_id, institucion_id, fecha_inicio, fecha_fin } = req.body;
+    const { estudiante_id, institucion_id, receptor_id, fecha_inicio, fecha_fin } = req.body;
 
+    console.log("Verificando asignaciones existentes para:", {
+      institucion_id,
+      receptor_id,
+      fecha_inicio,
+      fecha_fin
+    });
     // Verificar si el estudiante y la institución existen
     const estudiante = await Estudiante.findByPk(estudiante_id);
-    if (!estudiante) {
-      return res.status(400).json({ error: 'Estudiante no encontrado' });
-    }    const institucion = await Institucion.findByPk(institucion_id);
+    const institucion = await Institucion.findByPk(institucion_id);
 
     if (!estudiante || !institucion) {
       return res.status(400).json({ error: 'Estudiante o institución no encontrados' });
     }
 
+    // Verificar si ya hay asignaciones para el mismo receptor en el mismo periodo
+    const asignacionesExistentes = await Asignacion.findAll({
+      where: {
+        institucion_id,
+        receptor_id,
+        [Op.and]: [
+          {
+            // Nueva fecha de inicio debe ser menor o igual a la fecha de fin existente
+            fecha_inicio: { [Op.lte]: fecha_fin },
+          },
+          {
+            // Nueva fecha de fin debe ser mayor o igual a la fecha de inicio existente
+            fecha_fin: { [Op.gte]: fecha_inicio }
+          }
+        ]
+      }
+    });
+
+    // Si hay asignaciones existentes para el mismo receptor y periodo, retornar error
+    if (asignacionesExistentes.length > 0) {
+      return res.status(400).json({ error: 'Ya hay asignaciones para este receptor en este periodo.' });
+    }
+
+    console.log("Asignaciones existentes encontradas:", asignacionesExistentes);
+
+    // Crear nueva asignación
     const nuevaAsignacion = await Asignacion.create({
       estudiante_id,
       institucion_id,
+      receptor_id,
       fecha_inicio,
       fecha_fin
     });
@@ -129,13 +160,14 @@ export const eliminarAsignacion = async (req, res) => {
   try {
     const { id } = req.params;
 
+    // Busca la asignación por ID
     const asignacion = await Asignacion.findByPk(id);
     if (!asignacion) {
       return res.status(404).json({ error: 'Asignación no encontrada' });
     }
 
-    // En lugar de eliminar, cambiamos el estado a false
-    await asignacion.update({ estado: false });
+    // Eliminar físicamente la asignación
+    await asignacion.destroy();
 
     res.status(200).json({
       mensaje: 'Asignación eliminada exitosamente'

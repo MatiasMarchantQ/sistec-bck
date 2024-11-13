@@ -9,7 +9,9 @@ import {
   logout,
   cambiarContrasena,
   actualizarUsuario,
-  getMe
+  getMe,
+  solicitarRecuperacionContrasena,
+  restablecerContrasena
 } from '../controllers/authController.js';
 import { verifyToken } from '../middleware/authMiddleware.js';
 
@@ -29,4 +31,9 @@ router.post('/usuarios', verifyToken, crearUsuario);
 router.get('/me', verifyToken, getMe);
 
 router.put('/usuarios/:id', verifyToken, actualizarUsuario);
+
+// Rutas públicas para recuperación de contraseña
+router.post('/recuperar-contrasena', solicitarRecuperacionContrasena);
+router.post('/restablecer-contrasena', restablecerContrasena);
+
 export default router;
