@@ -10,7 +10,8 @@ import {
   obtenerCiclosVitalesFamiliares,
   obtenerTiposFamilia,
   obtenerFactoresRiesgoNino,
-  obtenerFactoresRiesgoFamiliar
+  obtenerFactoresRiesgoFamiliar,
+  obtenerDiagnosticos
 } from '../controllers/obtenerController.js';
 
 const router = express.Router();
@@ -24,6 +25,7 @@ router.get('/ciclos-vitales-familiares', verifyToken, obtenerCiclosVitalesFamili
 router.get('/tipos-familia', verifyToken, obtenerTiposFamilia);
 router.get('/factores-riesgo-nino', verifyToken, obtenerFactoresRiesgoNino);
 router.get('/factores-riesgo-familiar', verifyToken, obtenerFactoresRiesgoFamiliar);
+router.get('/diagnosticos', verifyToken, obtenerDiagnosticos);
 
 
 export default router;

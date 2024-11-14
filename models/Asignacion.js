@@ -3,6 +3,7 @@ import { Model, DataTypes } from 'sequelize';
 import sequelize from './index.js';
 import Estudiante from './Estudiante.js';
 import Institucion from './Institucion.js';
+import Receptor from './Receptor.js';
 
 class Asignacion extends Model {}
 
@@ -53,5 +54,6 @@ Asignacion.init ({
 
 Asignacion.belongsTo(Estudiante, { foreignKey: 'estudiante_id' });
 Asignacion.belongsTo(Institucion, { foreignKey: 'institucion_id' });
+Asignacion.belongsTo(Receptor, { foreignKey: 'receptor_id' });
 
 export default Asignacion;

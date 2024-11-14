@@ -9,7 +9,7 @@ import CicloVitalFamiliar from '../models/CicloVitalFamiliar.js';
 import TipoFamilia from '../models/TipoFamilia.js';
 import FactorRiesgoNino from '../models/FactorRiesgoNino.js';
 import FactorRiesgoFamiliar from '../models/FactorRiesgoFamiliar.js';
-
+import Diagnostico from '../models/Diagnostico.js';
 
 // Obtener todos los roles
 export const obtenerRoles = async (req, res) => {
@@ -136,5 +136,18 @@ export const obtenerFactoresRiesgoFamiliar = async (req, res) => {
   } catch (error) {
     console.error('Error al obtener factores de riesgo familiar:', error);
     res.status(500).json({ error: 'Error al obtener los factores de riesgo familiar' });
+  }
+};
+
+export const obtenerDiagnosticos = async (req, res) => {
+  try {
+      const diagnosticos = await Diagnostico.findAll({
+          attributes: ['id', 'nombre'],
+          order: [['id', 'ASC']] // Ordenar por ID de forma ascendente
+      });
+      res.json(diagnosticos);
+  } catch (error) {
+      console.error('Error al obtener diagnósticos:', error);
+      res.status(500).json({ error: 'Error al obtener los diagnósticos' });
   }
 };

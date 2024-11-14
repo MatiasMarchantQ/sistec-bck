@@ -6,6 +6,7 @@ import Estudiante from './Estudiante.js';
 import Institucion from './Institucion.js';
 import NivelEscolaridad from './NivelEscolaridad.js';
 import Usuario from './Usuario.js';
+import Diagnostico from './Diagnostico.js';
 
 class FichaClinicaAdulto extends Model {}
 
@@ -27,9 +28,17 @@ FichaClinicaAdulto.init({
     type: DataTypes.DATE,
     allowNull: false
   },
-  diagnostico: {
+  diagnostico_id: {
+    type: DataTypes.INTEGER,
+    references: {
+      model: Diagnostico,
+      key: 'id'
+    },
+    allowNull: true
+  },
+  diagnostico_otro: {
     type: DataTypes.STRING(200),
-    allowNull: false
+    allowNull: true
   },
   escolaridad_id: {
     type: DataTypes.INTEGER,
@@ -70,6 +79,10 @@ FichaClinicaAdulto.init({
   tabaquismo: {
     type: DataTypes.BOOLEAN,
     defaultValue: false
+  },
+  otros_factores: {
+    type: DataTypes.STRING(200),
+    allowNull: true
   },
   estudiante_id: {
     type: DataTypes.INTEGER,

@@ -12,11 +12,15 @@ FichaTipoFamilia.init({
   },
   ficha_clinica_id: {
     type: DataTypes.INTEGER,
-    allowNull: false
+    allowNull: true
   },
   tipo_familia_id: {
     type: DataTypes.INTEGER,
-    allowNull: false
+    allowNull: true
+  },
+  tipo_familia_otro: {
+    type: DataTypes.STRING,
+    allowNull: true
   },
   tipo_ficha: {
     type: DataTypes.ENUM('adulto', 'infantil'),

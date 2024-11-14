@@ -71,7 +71,15 @@ Estudiante.init({
   reset_password_expires: {
     type: DataTypes.DATE,
     allowNull: true
-  }
+  },
+  intentos_recuperacion: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0,
+  },
+  ultima_solicitud_recuperacion: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  },
 }, {
   sequelize,
   modelName: 'Estudiante',

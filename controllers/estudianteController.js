@@ -1,8 +1,25 @@
 // controllers/estudianteController.js
 import Estudiante from '../models/Estudiante.js';
+import Usuario from '../models/Usuario.js';
 import Rol from '../models/Rol.js';
 import bcrypt from 'bcrypt';
 import { Op } from 'sequelize';
+
+// Función auxiliar para verificar la unicidad del correo
+const verificarCorreoUnico = async (correo, idExcluido = null) => {
+  const correoExistenteEstudiante = await Estudiante.findOne({ 
+    where: { 
+      correo, 
+      ...(idExcluido && { id: { [Op.ne]: idExcluido } }) // Excluir el ID actual si se está actualizando
+    } 
+  });
+  
+  const correoExistenteUsuario = await Usuario.findOne({ 
+    where: { correo } 
+  });
+
+  return correoExistenteEstudiante || correoExistenteUsuario;
+};
 
 export const cargarEstudiantes = async (req, res) => {
   try {
@@ -20,6 +37,16 @@ export const cargarEstudiantes = async (req, res) => {
 
     for (const estudiante of estudiantes) {
       try {
+        // Verificar si el correo ya existe
+        const correoExistente = await verificarCorreoUnico(estudiante.correo);
+        if (correoExistente) {
+          errores.push({
+            rut: estudiante.rut,
+            error: `El correo ${estudiante.correo} ya está registrado`
+          });
+          continue; // Saltar al siguiente estudiante
+        }
+
         // Buscar el estudiante por RUT o correo
         let estudianteExistente = await Estudiante.findOne({
           where: {
@@ -82,7 +109,7 @@ export const cargarEstudiantes = async (req, res) => {
             rol_id: 3
           });
           nuevosEstudiantes++;
-          resultados.push({
+          resultados.push ({
             rut: estudiante.rut,
             mensaje: `Estudiante creado exitosamente con ID: ${ultimoId}`
           });
@@ -115,19 +142,6 @@ export const cargarEstudiantes = async (req, res) => {
   }
 };
 
-// Función auxiliar para formatear el RUT
-function formatearRUT(rut) {
-  // Eliminar puntos y guiones si existen
-  rut = rut.replace(/\./g, '').replace(/-/g, '');
-  
-  // Separar cuerpo y dígito verificador
-  const cuerpo = rut.slice(0, -1);
-  const dv = rut.slice(-1).toUpperCase();
-  
-  // Retornar RUT formateado
-  return `${cuerpo}-${dv}`;
-}
-
 export const actualizarEstudiantesMasivo = async (req, res) => {
   try {
     const { id, cambios } = req.body;
@@ -151,6 +165,18 @@ export const actualizarEstudiantesMasivo = async (req, res) => {
         error: 'Uno o más estudiantes no fueron encontrados',
         estudiantesNoEncontrados: estudiantesNoEncontrados
       });
+    }
+
+    // Verificar si el correo ya existe en los cambios
+    for (const estudiante of estudiantes) {
+      if (cambios.correo && cambios.correo !== estudiante.correo) {
+        const correoExistente = await verificarCorreoUnico(cambios.correo, estudiante.id);
+        if (correoExistente) {
+          return res.status(400).json({ 
+            error: `El correo ${cambios.correo} ya está registrado en el sistema` 
+          });
+        }
+      }
     }
 
     // Si todos existen, procedemos con la actualización
@@ -240,10 +266,32 @@ export const obtenerEstudiantes = async (req, res) => {
       const { nombres, apellidos, rut, correo, contrasena, anos_cursados, semestre } = req.body;
   
       // Verificar si el RUT ya existe
-      const estudianteExistente = await Estudiante.findOne({ where: { rut } });
-      if (estudianteExistente) {
-        return res.status(400).json({ error: 'El RUT ya está registrado' });
-      }
+    const estudianteExistente = await Estudiante.findOne({ 
+      where: { rut } 
+    });
+    
+    // Verificar si el correo ya existe en Estudiantes o Usuarios
+    const correoExistenteEstudiante = await Estudiante.findOne({ 
+      where: { correo } 
+    });
+    
+    const correoExistenteUsuario = await Usuario.findOne({ 
+      where: { correo } 
+    });
+
+    // Validaciones
+    if (estudianteExistente) {
+      return res.status(400).json({ error: 'El RUT ya está registrado' });
+    }
+
+    if (correoExistenteEstudiante || correoExistenteUsuario) {
+      return res.status(400).json({ 
+        error: 'El correo electrónico ya está registrado en el sistema',
+        detalles: correoExistenteEstudiante 
+          ? 'Registrado como estudiante' 
+          : 'Registrado como usuario'
+      });
+    }
   
       // Obtener el último estudiante para determinar el siguiente ID
       const ultimoEstudiante = await Estudiante.findOne({
@@ -255,7 +303,7 @@ export const obtenerEstudiantes = async (req, res) => {
       const hashedPassword = await bcrypt.hash(contrasena, 10);
   
       const nuevoEstudiante = await Estudiante.create({
-        id: siguienteId, // Asignamos el ID manualmente
+        id: siguienteId,
         nombres,
         apellidos,
         rut,
@@ -320,6 +368,29 @@ export const actualizarEstudiante = async (req, res) => {
       if (!estudiante) {
         return res.status(404).json({ error: 'Estudiante no encontrado' });
       }
+
+      // Si se intenta cambiar el correo, verificar que no exista en otras tablas
+    if (correo && correo !== estudiante.correo) {
+      const correoExistenteEstudiante = await Estudiante.findOne({ 
+        where: { 
+          correo, 
+          id: { [Op.ne]: id } // Excluir el estudiante actual
+        } 
+      });
+      
+      const correoExistenteUsuario = await Usuario.findOne({ 
+        where: { correo } 
+      });
+
+      if (correoExistenteEstudiante || correoExistenteUsuario) {
+        return res.status(400).json({ 
+          error: 'El correo electrónico ya está registrado en el sistema',
+          detalles: correoExistenteEstudiante 
+            ? 'Registrado como estudiante' 
+            : 'Registrado como usuario'
+        });
+      }
+    }
   
       // Crear un objeto con los campos a actualizar
       const camposActualizar = {};

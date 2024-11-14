@@ -302,6 +302,12 @@ export const obtenerSeguimientoAdultoPorId = async (req, res) => {
               model: PacienteAdulto,
               as: 'paciente_adulto',
               attributes: ['rut', 'nombres', 'apellidos', 'edad', 'fecha_nacimiento', 'telefono_principal','telefono_secundario']
+            },
+            {
+              model: Diagnostico,
+              as: 'diagnostico', // Asegúrate de que el alias coincida con tu definición de modelo
+              attributes: ['id', 'nombre'], // Ajusta los atributos según necesites
+              required: false
             }
           ]
       });

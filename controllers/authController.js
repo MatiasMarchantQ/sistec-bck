@@ -110,6 +110,14 @@ export const login = async (req, res) => {
   try {
     const { rut, contrasena, rememberMe } = req.body;
     
+    // Validar que se proporcionen RUT y contraseña
+    if (!rut || !contrasena) {
+      return res.status(400).json({ 
+        error: 'RUT y contraseña son obligatorios',
+        code: 'MISSING_CREDENTIALS'
+      });
+    }
+
     // Búsqueda para Usuario
     let user = await Usuario.findOne({ 
       where: sequelize.where(
@@ -136,19 +144,49 @@ export const login = async (req, res) => {
       });
     }
 
+    // Verificar si el usuario existe
     if (!user) {
-      return res.status(401).json({ error: 'Credenciales inválidas' });
+      return res.status(404).json({ 
+        error: 'Usuario no encontrado',
+        code: 'USER_NOT_FOUND'
+      });
     }
 
+    // Verificar estado del usuario
+    if (!user.estado) {
+      return res.status(403).json({ 
+        error: 'Cuenta desactivada',
+        code: 'ACCOUNT_DISABLED'
+      });
+    }
+
+    // Validar contraseña
     const validPassword = await bcrypt.compare(contrasena, user.contrasena);
     if (!validPassword) {
-      return res.status(401).json({ error: 'Credenciales inválidas' });
+      return res.status(401).json({ 
+        error: 'Contraseña incorrecta',
+        code: 'INVALID_PASSWORD'
+      });
+    }
+
+    // Verificar bloqueos o intentos de inicio de sesión (si aplica)
+    if (user.intentos_fallidos >= 3) {
+      return res.status(403).json({ 
+        error: 'Cuenta bloqueada temporalmente',
+        code: 'ACCOUNT_LOCKED',
+        desbloqueado_en: user.bloqueado_hasta
+      });
     }
 
     const isEstudiante = user instanceof Estudiante;
     const { accessToken, refreshToken } = generateTokens(user, rememberMe, isEstudiante ? user.id : null);
 
-    await user.update({ refresh_token: refreshToken });
+    // Restablecer intentos fallidos
+    await user.update({ 
+      refresh_token: refreshToken,
+      intentos_fallidos: 0,
+      bloqueado_hasta: null
+    });
 
     res.json({ 
       accessToken, 
@@ -163,7 +201,11 @@ export const login = async (req, res) => {
     });
   } catch (error) {
     console.error('Error en login:', error);
-    res.status(500).json({ error: 'Error en el servidor' });
+    res.status(500).json({ 
+      error: 'Error interno del servidor', 
+      code: 'SERVER_ERROR',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };
 
@@ -359,8 +401,6 @@ export const getMe = async (req, res) => {
 };
 
 // Controlador para actualizar datos del usuario
-// src/controllers/authController.js
-
 export const actualizarUsuario = async (req, res) => {
   try {
     const { id } = req.params;
@@ -401,7 +441,6 @@ export const actualizarUsuario = async (req, res) => {
 //Recuperacion contraseña
 export const solicitarRecuperacionContrasena = async (req, res) => {
   try {
-    // Verificar que el secreto existe
     if (!process.env.JWT_RESET_SECRET) {
       console.error('JWT_RESET_SECRET no está definido');
       return res.status(500).json({ 
@@ -411,16 +450,8 @@ export const solicitarRecuperacionContrasena = async (req, res) => {
 
     const { email } = req.body;
 
-    // Buscar usuario en ambos modelos
-    let usuario = await Usuario.findOne({ 
-      where: { correo: email } 
-    });
-
-    if (!usuario) {
-      usuario = await Estudiante.findOne({
-        where: { correo: email }
-      });
-    }
+    let usuario = await Usuario.findOne({ where: { correo: email } }) ||
+                  await Estudiante.findOne({ where: { correo: email } });
 
     if (!usuario) {
       return res.status(404).json({ 
@@ -428,9 +459,28 @@ export const solicitarRecuperacionContrasena = async (req, res) => {
       });
     }
 
-    // Depuración: Verificar el secreto
-    console.log('JWT_RESET_SECRET:', process.env.JWT_RESET_SECRET);
-    console.log('JWT_RESET_SECRET length:', process.env.JWT_RESET_SECRET.length);
+    const tiempoActual = new Date();
+    const tiempoDesdeUltimaSolicitud = usuario.ultima_solicitud_recuperacion ? tiempoActual - usuario.ultima_solicitud_recuperacion : null;
+
+    // Reiniciar el contador si ha pasado más de 15 minutos
+    if (tiempoDesdeUltimaSolicitud >= 15 * 60 * 1000) {
+      usuario.intentos_recuperacion = 0;
+    }
+
+    // Bloquear si se han excedido los intentos
+    if (usuario.intentos_recuperacion >= 3) {
+      if (!usuario.bloqueado_hasta || new Date() > usuario.bloqueado_hasta) {
+        usuario.bloqueado_hasta = new Date(Date.now() + 30 * 60 * 1000); // Bloquear por 30 minutos
+        await usuario.save();
+        return res.status(429).json({ 
+          error: 'Demasiados intentos de recuperación. Por favor, inténtelo más tarde.' 
+        });
+      } else {
+        return res.status(429).json({
+          error: `Bloqueado hasta ${usuario.bloqueado_hasta.toISOString()}`
+        });
+      }
+    }
 
     // Generar token de recuperación con JWT
     const resetToken = jwt.sign(
@@ -447,6 +497,8 @@ export const solicitarRecuperacionContrasena = async (req, res) => {
     // Guardar token y fecha de expiración
     usuario.reset_password_token = resetToken;
     usuario.reset_password_expires = new Date(Date.now() + 3600000); // 1 hora
+    usuario.ultima_solicitud_recuperacion = tiempoActual; // Actualizar la última solicitud
+    usuario.intentos_recuperacion += 1; // Incrementar el contador
     await usuario.save();
 
     // Enviar correo de recuperación
@@ -457,7 +509,6 @@ export const solicitarRecuperacionContrasena = async (req, res) => {
     });
   } catch (error) {
     console.error('Error en solicitud de recuperación:', error);
-    console.error('Detalles del error:', error.message);
     res.status(500).json({ 
       error: 'Error al procesar la solicitud de recuperación',
       detalle: error.message

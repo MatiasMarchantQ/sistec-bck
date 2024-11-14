@@ -6,7 +6,6 @@ import Receptor from '../models/Receptor.js';
 import { Op } from 'sequelize';
 
 // Obtener todas las asignaciones
-// controllers/asignacionesController.js
 export const obtenerAsignaciones = async (req, res) => {
   try {
     const { page = 1, limit = 10, search = '' } = req.query;
@@ -31,8 +30,9 @@ export const obtenerAsignaciones = async (req, res) => {
         { 
           model: Institucion, 
           attributes: ['nombre'],
-          include: [{ model: Receptor, attributes: ['nombre'], as: 'receptores' }] // Usa el alias aquí
-        }
+          include: [{ model: Receptor, attributes: ['nombre'], as: 'receptores' }]
+        },
+        { model: Receptor, attributes: ['id', 'nombre', 'cargo'] }
       ],
       offset: Number(offset),
       limit: Number(limit),
