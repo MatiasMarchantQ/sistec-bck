@@ -110,7 +110,8 @@ export const getFichasClinicasPorInstitucion = async (req, res) => {
                 },
                 {
                     model: Diagnostico,
-                    attributes: ['id', 'nombre']
+                    attributes: ['id', 'nombre'],
+                    as: 'diagnostico'
                 },
             ],
             order: [['fecha_evaluacion', 'DESC']],
@@ -161,7 +162,7 @@ export const getFichasClinicasPorInstitucion = async (req, res) => {
             limit,
             offset
         });
-
+        
         // Formatear fichas de adultos
         const fichasAdultosFormateadas = fichasAdultos.rows.map(ficha => ({
             id: ficha.id,
@@ -175,8 +176,7 @@ export const getFichasClinicasPorInstitucion = async (req, res) => {
             },
             diagnostico: {
                 id: ficha.diagnostico_id,
-                nombre: ficha.Diagnostico ? ficha.Diagnostico.nombre : ficha.diagnostico_otro,
-                otro: ficha.diagnostico_otro
+                nombre: ficha.diagnostico && ficha.diagnostico.nombre ? ficha.diagnostico.nombre : ficha.diagnostico_otro,
             },
             escolaridad: ficha.NivelEscolaridad?.nivel,
             ocupacion: ficha.ocupacion,
@@ -202,7 +202,10 @@ export const getFichasClinicasPorInstitucion = async (req, res) => {
                 rut: ficha.PacienteInfantil.rut,
                 edad: ficha.PacienteInfantil.edad
             },
-            diagnostico: ficha.diagnostico_dsm,
+            diagnostico: {
+                id: null,
+                nombre: ficha.diagnostico_dsm || 'Sin diagnóstico'
+            },
             puntajeDPM: ficha.puntaje_dpm,
             conQuienVive: ficha.con_quien_vive,
             tiposFamilia: ficha.tiposFamiliaInfantil.map(t => t.nombre),
