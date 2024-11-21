@@ -2,6 +2,8 @@
 import { Model, DataTypes } from 'sequelize';
 import sequelize from './index.js';
 import PacienteAdulto from './PacienteAdulto.js';
+import Estudiante from './Estudiante.js';
+import Usuario from './Usuario.js';
 
 class SeguimientoAdulto extends Model {}
 
@@ -90,7 +92,15 @@ SeguimientoAdulto.init({
   comentarios: {
     type: DataTypes.TEXT,
     allowNull: true
-  }
+  },
+  estudiante_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true, // o false si es obligatorio
+  },
+  usuario_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true, // o false si es obligatorio
+  },
 }, {
   sequelize,
   modelName: 'SeguimientoAdulto',
@@ -114,5 +124,8 @@ PacienteAdulto.hasMany(SeguimientoAdulto, {
   foreignKey: 'paciente_id', 
   as: 'seguimientos_adulto' 
 });
+
+SeguimientoAdulto.belongsTo(Estudiante, { foreignKey: 'estudiante_id', as: 'estudiante' });
+SeguimientoAdulto.belongsTo(Usuario, { foreignKey: 'usuario_id', as: 'usuario' });
 
 export default SeguimientoAdulto;

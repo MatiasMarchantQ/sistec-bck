@@ -13,7 +13,7 @@ const sequelize = new Sequelize(
     host: process.env.DB_HOST,
     dialect: 'mysql',
     port: process.env.DB_PORT || 3306,
-    logging: false, // Puedes cambiarlo a true si quieres ver las consultas SQL en la consola
+    logging: console.log, // Puedes cambiarlo a true si quieres ver las consultas SQL en la consola
     pool: {
       max: 5,
       min: 0,

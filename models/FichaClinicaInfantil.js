@@ -2,7 +2,8 @@ import { Model, DataTypes } from 'sequelize';
 import sequelize from './index.js';
 import PacienteInfantil from './PacienteInfantil.js';
 import Institucion from './Institucion.js';
-
+import Usuario from './Usuario.js';
+import Estudiante from './Estudiante.js';
 
 const FichaClinicaInfantil = sequelize.define('FichaClinicaInfantil', {
   id: {
@@ -34,6 +35,14 @@ const FichaClinicaInfantil = sequelize.define('FichaClinicaInfantil', {
     type: DataTypes.STRING,
     allowNull: true
   },
+  ciclo_vital_familiar_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'CicloVitalFamiliar',
+      key: 'id'
+    }
+  },
   estudiante_id: {
     type: DataTypes.INTEGER,
     allowNull: true
@@ -52,6 +61,8 @@ const FichaClinicaInfantil = sequelize.define('FichaClinicaInfantil', {
 });
 
 FichaClinicaInfantil.belongsTo(PacienteInfantil, { foreignKey: 'paciente_id' });
-FichaClinicaInfantil.belongsTo(Institucion, { foreignKey: 'institucion_id' });
+FichaClinicaInfantil.belongsTo(Usuario, { foreignKey: 'usuario_id', as: 'usuario' });
+FichaClinicaInfantil.belongsTo(Estudiante, { foreignKey: 'estudiante_id', as: 'estudiante' });
+FichaClinicaInfantil.belongsTo(Institucion, { foreignKey: 'institucion_id', as: 'institucion' });
 
 export default FichaClinicaInfantil;

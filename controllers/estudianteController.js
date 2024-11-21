@@ -4,21 +4,167 @@ import Usuario from '../models/Usuario.js';
 import Rol from '../models/Rol.js';
 import bcrypt from 'bcrypt';
 import { Op } from 'sequelize';
+import { enviarCredencialesEstudiante } from '../services/emailService.js'
+import pLimit from 'p-limit'; // Librería para limitar concurrencia
 
-// Función auxiliar para verificar la unicidad del correo
-const verificarCorreoUnico = async (correo, idExcluido = null) => {
-  const correoExistenteEstudiante = await Estudiante.findOne({ 
-    where: { 
-      correo, 
-      ...(idExcluido && { id: { [Op.ne]: idExcluido } }) // Excluir el ID actual si se está actualizando
-    } 
-  });
+export const enviarCredencialesMasivo = async (req, res) => {
+  try {
+    const { ano_cursado } = req.body;
+
+    // Buscar estudiantes
+    const estudiantes = await Estudiante.findAll({
+      where: {
+        anos_cursados: {
+          [Op.like]: `%${ano_cursado}%`
+        },
+        estado: true,
+        debe_cambiar_contrasena: true
+      }
+    });
+
+    if (estudiantes.length === 0) {
+      return res.status(404).json({
+        mensaje: `No se encontraron estudiantes para el año ${ano_cursado}`
+      });
+    }
+
+    // Iniciar respuesta inmediata
+    res.status(200).json({
+      mensaje: 'Proceso de envío iniciado',
+      total_estudiantes: estudiantes.length
+    });
+
+    // Configurar límite de concurrencia
+    const limit = pLimit(5); // Máximo 5 envíos simultáneos
+    const INTERVALO_ENTRE_LOTES = 2000; // 2 segundos entre lotes
+
+    const resultados = [];
+    const errores = [];
+
+    // Procesar en lotes
+    const procesarLote = async (lote) => {
+      const promesas = lote.map(estudiante => 
+        limit(async () => {
+          try {
+            // Generar contraseña temporal si no tiene
+            const contrasenatemporal = estudiante.contrasena || 
+              generarContrasenaTemporalSegura();
+
+            // Enviar credenciales
+            await enviarCredencialesEstudiante(estudiante, contrasenatemporal);
+
+            resultados.push({
+              rut: estudiante.rut,
+              correo: estudiante.correo,
+              nombres: estudiante.nombres,
+              apellidos: estudiante.apellidos,
+              mensaje: 'Credenciales enviadas exitosamente'
+            });
+          } catch (error) {
+            console.error(`Error enviando credenciales a ${estudiante.correo}:`, error);
+            errores.push({
+              rut: estudiante.rut,
+              correo: estudiante.correo,
+              error: error.message
+            });
+          }
+        })
+      );
+
+      return Promise.all(promesas);
+    };
+
+    // Procesar en lotes de 10
+    const TAMAÑO_LOTE = 10;
+    for (let i = 0; i < estudiantes.length; i += TAMAÑO_LOTE) {
+      const lote = estudiantes.slice(i, i + TAMAÑO_LOTE);
+      
+      await procesarLote(lote);
+      
+      // Pequeña pausa entre lotes para evitar sobrecargar el servidor de correo
+      await new Promise(resolve => setTimeout(resolve, INTERVALO_ENTRE_LOTES));
+    }
+
+  } catch (error) {
+    console.error('Error en envío masivo de credenciales:', error);
+  }
+};
+
+// Función para generar contraseña temporal
+const generarContrasenaTemporalSegura = () => {
+  const caracteres = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()';
+  const longitudContrasena = 12;
+  let contrasena = '';
   
-  const correoExistenteUsuario = await Usuario.findOne({ 
-    where: { correo } 
-  });
+  for (let i = 0; i < longitudContrasena; i++) {
+    const indiceAleatorio = Math.floor(Math.random() * caracteres.length);
+    contrasena += caracteres[indiceAleatorio];
+  }
+  
+  return contrasena;
+};
 
-  return correoExistenteEstudiante || correoExistenteUsuario;
+export const cambiarContrasenaEstudiante = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { nuevaContrasena } = req.body;
+
+    const estudiante = await Estudiante.findByPk(id);
+    if (!estudiante) {
+      return res.status(404).json({ error: 'Estudiante no encontrado' });
+    }
+
+    // Actualizar contraseña sin hashear
+    await estudiante.update({
+      contrasena: nuevaContrasena,
+      debe_cambiar_contrasena: false
+    });
+
+    // Enviar correo de notificación con la nueva contraseña
+    await enviarCredencialesEstudiante(estudiante, nuevaContrasena);
+
+    res.status(200).json({ mensaje: 'Contraseña cambiada exitosamente' });
+  } catch (error) {
+    console.error('Error al cambiar contraseña:', error);
+    res.status(500).json({
+      error: 'Error al cambiar contraseña',
+      detalles: error.message
+    });
+  }
+};
+
+export const enviarCredencialIndividual = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const estudiante = await Estudiante.findByPk(id);
+    if (!estudiante) {
+      return res.status(404).json({ error: 'Estudiante no encontrado' });
+    }
+
+    // Generar contraseña temporal
+    const contrasenatemporal = generarContrasenaTemporalSegura();
+
+    // Actualizar contraseña del estudiante
+    await estudiante.update({
+      contrasena: contrasenatemporal,
+      debe_cambiar_contrasena: true
+    });
+
+    // Enviar credenciales
+    await enviarCredencialesEstudiante(estudiante, contrasenatemporal);
+
+    res.status(200).json({ 
+      mensaje: 'Credenciales enviadas exitosamente',
+      correo: estudiante.correo
+    });
+  } catch (error) {
+    console.error('Error al enviar credenciales:', error);
+    res.status(500).json({
+      error: 'Error al enviar credenciales',
+      detalles: error.message
+    });
+  }
 };
 
 export const cargarEstudiantes = async (req, res) => {
@@ -37,16 +183,6 @@ export const cargarEstudiantes = async (req, res) => {
 
     for (const estudiante of estudiantes) {
       try {
-        // Verificar si el correo ya existe
-        const correoExistente = await verificarCorreoUnico(estudiante.correo);
-        if (correoExistente) {
-          errores.push({
-            rut: estudiante.rut,
-            error: `El correo ${estudiante.correo} ya está registrado`
-          });
-          continue; // Saltar al siguiente estudiante
-        }
-
         // Buscar el estudiante por RUT o correo
         let estudianteExistente = await Estudiante.findOne({
           where: {
@@ -90,17 +226,16 @@ export const cargarEstudiantes = async (req, res) => {
             });
           }
         } else {
-          // Incrementar el último ID para el nuevo estudiante
           ultimoId++;
           
           // Crear nuevo estudiante con ID específico
-          await Estudiante.create({
+          const nuevoEstudiante = await Estudiante.create({
             id: ultimoId, // Especificamos el ID
             nombres: estudiante.nombres,
             apellidos: estudiante.apellidos,
             rut: estudiante.rut,
             correo: estudiante.correo,
-            contrasena: await bcrypt.hash(estudiante.contrasena, 10),
+            contrasena: estudiante.contrasena, // Sin hashear
             debe_cambiar_contrasena: true,
             estado: true,
             contador_registros: 1,
@@ -109,10 +244,12 @@ export const cargarEstudiantes = async (req, res) => {
             rol_id: 3
           });
           nuevosEstudiantes++;
-          resultados.push ({
+          resultados.push({
             rut: estudiante.rut,
             mensaje: `Estudiante creado exitosamente con ID: ${ultimoId}`
           });
+          // Enviar credenciales por correo
+          await enviarCredencialesEstudiante(nuevoEstudiante, estudiante.contrasena);
         }
       } catch (error) {
         console.error('Error al procesar estudiante:', error);
@@ -170,7 +307,13 @@ export const actualizarEstudiantesMasivo = async (req, res) => {
     // Verificar si el correo ya existe en los cambios
     for (const estudiante of estudiantes) {
       if (cambios.correo && cambios.correo !== estudiante.correo) {
-        const correoExistente = await verificarCorreoUnico(cambios.correo, estudiante.id);
+        const correoExistente = await Estudiante.findOne({
+          where: {
+            correo: cambios.correo,
+            id: { [Op.ne]: estudiante.id } // Ignorar el estudiante que se está actualizando
+          }
+        });
+        
         if (correoExistente) {
           return res.status(400).json({ 
             error: `El correo ${cambios.correo} ya está registrado en el sistema` 
@@ -179,7 +322,7 @@ export const actualizarEstudiantesMasivo = async (req, res) => {
       }
     }
 
-    // Si todos existen, procedemos con la actualización
+    // Si todos existen y no hay conflictos de correo, procedemos con la actualización
     const actualizaciones = await Estudiante.update(cambios, {
       where: {
         id: {

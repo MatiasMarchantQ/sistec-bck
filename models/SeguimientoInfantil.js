@@ -1,6 +1,8 @@
 import { Model, DataTypes } from 'sequelize';
 import sequelize from './index.js';
 import PacienteAdulto from './PacienteAdulto.js';
+import Usuario from './Usuario.js';
+import Estudiante from './Estudiante.js';
 
 const SeguimientoInfantil = sequelize.define('SeguimientoInfantil', {
   id: {
@@ -48,7 +50,15 @@ const SeguimientoInfantil = sequelize.define('SeguimientoInfantil', {
   area_socioemocional: {
     type: DataTypes.TINYINT(1),
     defaultValue: 0
-  }
+  },
+  usuario_id: {
+    type: DataTypes.INTEGER,
+    allowNull: false
+  },
+  estudiante_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true
+  },
 }, {
   tableName: 'seguimiento_infantil',
   timestamps: true
@@ -61,6 +71,17 @@ SeguimientoInfantil.belongsTo(PacienteAdulto, {
   scope: {
     tipo_paciente: 'adulto'
   }
+});
+
+SeguimientoInfantil.belongsTo(Usuario, { 
+  foreignKey: 'usuario_id', 
+  as: 'SeguimientoUsuario'
+});
+
+SeguimientoInfantil.belongsTo(Estudiante, { 
+  foreignKey: 'estudiante_id', 
+  as: 'SeguimientoEstudiante',
+  allowNull: true
 });
 
 export default SeguimientoInfantil;

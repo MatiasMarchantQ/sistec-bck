@@ -9,7 +9,6 @@ import FichaClinicaInfantil from './FichaClinicaInfantil.js';
 import TipoFamilia from './TipoFamilia.js';
 import FichaTipoFamilia from './FichaTipoFamilia.js';
 import CicloVitalFamiliar from './CicloVitalFamiliar.js';
-import FichaCicloVital from './FichaCicloVital.js';
 import FactorRiesgoNino from './FactorRiesgoNino.js';
 import FactorRiesgoFamiliar from './FactorRiesgoFamiliar.js';
 import FichaFactorRiesgoNino from './FichaFactorRiesgoNino.js';
@@ -19,6 +18,7 @@ import PacienteInfantil from './PacienteInfantil.js';
 import SeguimientoInfantil from './SeguimientoInfantil.js';
 import NivelEscolaridad from './NivelEscolaridad.js';
 import Diagnostico from './Diagnostico.js';
+import SeguimientoAdulto from './SeguimientoAdulto.js';
 
 export function setupAssociations() {
   Institucion.hasMany(Receptor, { as: 'receptores', foreignKey: 'institucion_id' });
@@ -47,18 +47,14 @@ export function setupAssociations() {
     as: 'fichasClinicas'
   });
 
-  FichaClinicaAdulto.belongsToMany(CicloVitalFamiliar, {
-    through: FichaCicloVital,
-    foreignKey: 'ficha_clinica_id',
-    otherKey: 'ciclo_vital_familiar_id',
-    as: 'ciclosVitalesFamiliares'
-  });
-
-  CicloVitalFamiliar.belongsToMany(FichaClinicaAdulto, {
-    through: FichaCicloVital,
+  FichaClinicaAdulto.belongsTo(CicloVitalFamiliar, {
     foreignKey: 'ciclo_vital_familiar_id',
-    otherKey: 'ficha_clinica_id',
-    as: 'fichasClinicas'
+    as: 'cicloVitalFamiliarAdulto'
+  });
+  
+  CicloVitalFamiliar.hasMany(FichaClinicaAdulto, {
+    foreignKey: 'ciclo_vital_familiar_id',
+    as: 'fichasClinicasAdultos'
   });
 
   FichaClinicaInfantil.belongsToMany(FactorRiesgoNino, {
@@ -89,31 +85,36 @@ export function setupAssociations() {
     as: 'fichasClinicasFamiliar'
   });
 
-  FichaClinicaInfantil.belongsToMany(TipoFamilia, {
-    through: FichaTipoFamilia,
+  FichaClinicaInfantil.hasMany(FichaTipoFamilia, {
     foreignKey: 'ficha_clinica_id',
-    otherKey: 'tipo_familia_id',
-    as: 'tiposFamiliaInfantil'
+    as: 'fichasTipoFamiliaInfantiles'
   });
-
-  TipoFamilia.belongsToMany(FichaClinicaInfantil, {
-    through: FichaTipoFamilia,
+  
+  // Definición de la relación entre TipoFamilia y FichaTipoFamilia
+  TipoFamilia.hasMany(FichaTipoFamilia, {
     foreignKey: 'tipo_familia_id',
-    otherKey: 'ficha_clinica_id',
-    as: 'fichasClinicasInfantiles'
+    as: 'fichasTipoFamiliaInfantil'
   });
-
-  FichaClinicaInfantil.belongsToMany(CicloVitalFamiliar, {
-    through: FichaCicloVital,
+  
+  // Definición de la relación entre FichaTipoFamilia y FichaClinicaInfantil
+  FichaTipoFamilia.belongsTo(FichaClinicaInfantil, {
     foreignKey: 'ficha_clinica_id',
-    otherKey: 'ciclo_vital_familiar_id',
-    as: 'ciclosVitalesFamiliaresInfantil'
+    as: 'fichaClinicaInfantil'
+  });
+  
+  // Definición de la relación entre FichaTipoFamilia y TipoFamilia
+  FichaTipoFamilia.belongsTo(TipoFamilia, {
+    foreignKey: 'tipo_familia_id',
+    as: 'tipoFamiliaInfantil'
   });
 
-  CicloVitalFamiliar.belongsToMany(FichaClinicaInfantil, {
-    through: FichaCicloVital,
+  FichaClinicaInfantil.belongsTo(CicloVitalFamiliar, {
     foreignKey: 'ciclo_vital_familiar_id',
-    otherKey: 'ficha_clinica_id',
+    as: 'cicloVitalFamiliarInfantil'
+  });
+  
+  CicloVitalFamiliar.hasMany(FichaClinicaInfantil, {
+    foreignKey: 'ciclo_vital_familiar_id',
     as: 'fichasClinicasInfantiles'
   });
 
@@ -128,6 +129,9 @@ export function setupAssociations() {
 
   FichaClinicaInfantil.belongsTo(Institucion, { foreignKey: 'institucion_id' });
   Institucion.hasMany(FichaClinicaInfantil, { foreignKey: 'institucion_id' });
+
+  FichaClinicaAdulto.belongsTo(Institucion, { foreignKey: 'institucion_id' });
+  Institucion.hasMany(FichaClinicaAdulto, { foreignKey: 'institucion_id' });
 
   PacienteInfantil.hasMany(SeguimientoInfantil, {
     foreignKey: 'paciente_id',

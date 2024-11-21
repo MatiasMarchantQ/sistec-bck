@@ -6,7 +6,7 @@ import { getFichasClinicasPorInstitucion, createFichaClinicaAdulto, getFichaClin
 
 const router = Router();
 router.get('/', verifyToken, obtenerFichasClinicas);
-router.get('/institucion/:institucionId', verifyToken, getFichasClinicasPorInstitucion);
+router.get('/institucion/:institucionId?', verifyToken, getFichasClinicasPorInstitucion);
 router.get('/:id', verifyToken, getFichaClinica);
 router.post('/adulto', verifyToken, createFichaClinicaAdulto);
 router.get('/adulto/:id', verifyToken, getFichaClinica);

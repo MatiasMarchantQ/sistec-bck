@@ -60,6 +60,14 @@ FichaClinicaAdulto.init({
     type: DataTypes.STRING(200),
     allowNull: true
   },
+  ciclo_vital_familiar_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'CicloVitalFamiliar',
+      key: 'id'
+    }
+  },
   horario_llamada: {
     type: DataTypes.STRING(50),
     allowNull: true
@@ -117,9 +125,9 @@ FichaClinicaAdulto.init({
 
 
 FichaClinicaAdulto.belongsTo(PacienteAdulto, { foreignKey: 'paciente_id' });
-FichaClinicaAdulto.belongsTo(Estudiante, { foreignKey: 'estudiante_id' });
-FichaClinicaAdulto.belongsTo(Institucion, { foreignKey: 'institucion_id' });
-FichaClinicaAdulto.belongsTo(NivelEscolaridad, { foreignKey: 'escolaridad_id' });
-FichaClinicaAdulto.belongsTo(Usuario, { foreignKey: 'usuario_id' });
+FichaClinicaAdulto.belongsTo(Estudiante, { foreignKey: 'estudiante_id', as: 'estudiante' });
+FichaClinicaAdulto.belongsTo(NivelEscolaridad, { foreignKey: 'escolaridad_id', });
+FichaClinicaAdulto.belongsTo(Usuario, { foreignKey: 'usuario_id', as: 'usuario'  });
+FichaClinicaAdulto.belongsTo(Institucion, { foreignKey: 'institucion_id', as: 'institucion' });
 
 export default FichaClinicaAdulto;

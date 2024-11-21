@@ -6,7 +6,10 @@ import {
   crearEstudiante,
   actualizarEstudiante,
   eliminarEstudiante,
-  actualizarEstudiantesMasivo
+  actualizarEstudiantesMasivo,
+  enviarCredencialesMasivo,
+  enviarCredencialIndividual,
+  cambiarContrasenaEstudiante
 } from '../controllers/estudianteController.js';
 
 const router = express.Router();
@@ -17,5 +20,11 @@ router.post('/', crearEstudiante);
 router.put('/edicion-masiva', actualizarEstudiantesMasivo);
 router.put('/:id', actualizarEstudiante);
 router.delete('/:id', eliminarEstudiante);
+
+router.post('/enviar-credenciales-masivo', enviarCredencialesMasivo);
+
+// En estudianteRoutes.js
+router.put('/:id/cambiar-contrasena', cambiarContrasenaEstudiante);
+router.post('/:id/enviar-credencial', enviarCredencialIndividual);
 
 export default router;

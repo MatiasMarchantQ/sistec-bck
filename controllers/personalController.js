@@ -28,7 +28,8 @@ export const obtenerPersonal = async (req, res) => {
       whereClause[Op.or] = [
         { nombres: { [Op.like]: `%${search}%` } },
         { apellidos: { [Op.like]: `%${search}%` } },
-        { correo: { [Op.like]: `%${search}%` } }
+        { correo: { [Op.like]: `%${search}%` } },
+        { rut: { [Op.like]: `%${search}%` } }
       ];
     }
 

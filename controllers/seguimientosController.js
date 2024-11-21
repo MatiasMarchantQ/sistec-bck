@@ -2,49 +2,70 @@ import SeguimientoInfantil from '../models/SeguimientoInfantil.js';
 import SeguimientoAdulto from '../models/SeguimientoAdulto.js';
 import PacienteInfantil from '../models/PacienteInfantil.js';
 import PacienteAdulto from '../models/PacienteAdulto.js';
+import Usuario from '../models/Usuario.js';
+import Estudiante from '../models/Estudiante.js';
+import Diagnostico from '../models/Diagnostico.js';
+import FichaClinicaAdulto from '../models/FichaClinicaAdulto.js';
 import { Op } from 'sequelize';
 
 
 // Crear nuevo seguimiento
 export const crearSeguimientoInfantil = async (req, res) => {
-    try {
-      const {
-        pacienteId,
-        fecha,
-        grupoEdad,
-        areaDPM,
-      } = req.body;
-  
-      // Validar que el paciente infantil exista
-      const pacienteExistente = await PacienteInfantil.findByPk(pacienteId);
-  
-      if (!pacienteExistente) {
-        return res.status(400).json({ error: 'Paciente infantil no encontrado' });
-      }
-  
-      const nuevoSeguimiento = await SeguimientoInfantil.create({
-        paciente_id: pacienteId,
-        tipo_paciente: 'infantil',
-        fecha,
-        grupo_edad: grupoEdad,
-        // Convertir booleanos a enteros (0 o 1)
-        area_motor_grueso: areaDPM.motorGrueso ? 1 : 0,
-        area_motor_fino: areaDPM.motorFino ? 1 : 0,
-        area_comunicacion: areaDPM.comunicacion ? 1 : 0,
-        area_cognoscitivo: areaDPM.cognoscitivo ? 1 : 0,
-        area_socioemocional: areaDPM.socioemocional ? 1 : 0
-      });
-  
-      res.status(201).json(nuevoSeguimiento);
-    } catch (error) {
-      console.error('Error al crear seguimiento infantil:', error);
-      res.status(500).json({ 
-        error: 'Error al crear el seguimiento infantil',
-        detalle: error.message,
-        stack: error.stack
-      });
+  try {
+    const {
+      pacienteId,
+      fecha,
+      grupoEdad,
+      areaDPM,
+      usuario_id,
+      estudiante_id
+    } = req.body;
+
+    // Validar que el paciente infantil exista
+    const pacienteExistente = await PacienteInfantil.findByPk(pacienteId);
+
+    if (!pacienteExistente) {
+      return res.status(400).json({ error: 'Paciente infantil no encontrado' });
     }
-  };
+
+    // Buscar el último seguimiento para este paciente
+    const ultimoSeguimiento = await SeguimientoInfantil.findOne({
+      where: { paciente_id: pacienteId },
+      order: [['numero_llamado', 'DESC']]
+    });
+
+    // Generar número de llamado
+    const numero_llamado = ultimoSeguimiento 
+      ? ultimoSeguimiento.numero_llamado + 1 
+      : 1;
+
+    const nuevoSeguimiento = await SeguimientoInfantil.create({
+      paciente_id: pacienteId,
+      tipo_paciente: 'infantil',
+      fecha,
+      grupo_edad: grupoEdad,
+      // Convertir booleanos a enteros (0 o 1)
+      area_motor_grueso: areaDPM.motorGrueso ? 1 : 0,
+      area_motor_fino: areaDPM.motorFino ? 1 : 0,
+      area_comunicacion: areaDPM.comunicacion ? 1 : 0,
+      area_cognoscitivo: areaDPM.cognoscitivo ? 1 : 0,
+      area_socioemocional: areaDPM.socioemocional ? 1 : 0,
+      usuario_id: usuario_id,
+      estudiante_id: estudiante_id || null,
+      numero_llamado: numero_llamado // Añadir número de llamado
+    });
+
+    res.status(201).json(nuevoSeguimiento);
+  } catch (error) {
+    console.error('Error al crear seguimiento infantil:', error);
+    res.status(500).json({ 
+      error: 'Error al crear el seguimiento infantil',
+      detalle: error.message,
+      stack: error.stack
+    });
+  }
+};
+
   export const obtenerSeguimientoInfantilPorId = async (req, res) => {
     try {
         const { id } = req.params;
@@ -112,14 +133,24 @@ export const obtenerSeguimientosInfantiles = async (req, res) => {
             offset,
             order: [
                 ['grupo_edad', 'ASC'],  // Primero por grupo de edad
-                ['numero_llamado', 'ASC']  // Luego por número de llamado
+                ['numero_llamado', 'DESC']  // Luego por número de llamado
             ],
             include: [
                 {
                     model: PacienteInfantil,
                     as: 'paciente_infantil',
                     attributes: ['nombres', 'apellidos']
-                }
+                },
+                {
+                  model: Usuario,
+                  as: 'SeguimientoUsuario',
+                  attributes: ['nombres', 'apellidos', 'rut', 'correo']
+              },
+              {
+                  model: Estudiante,
+                  as: 'SeguimientoEstudiante',
+                  attributes: ['nombres', 'apellidos', 'rut', 'correo']
+              }
             ]
         });
 
@@ -139,7 +170,9 @@ export const obtenerSeguimientosInfantiles = async (req, res) => {
                 areaSocioemocional: seguimiento.recomendacion_socioemocional,
                 areaCognitiva: seguimiento.recomendacion_cognitiva
             },
-            numeroLlamado: seguimiento.numero_llamado
+            numeroLlamado: seguimiento.numero_llamado,
+            usuario: seguimiento.SeguimientoUsuario,
+            estudiante: seguimiento.SeguimientoEstudiante
         }));
 
         res.status(200).json({
@@ -177,7 +210,9 @@ export const crearSeguimientoAdulto = async (req, res) => {
       autoeficacia,
       otrosSintomas,
       manejoSintomas,
-      comentarios
+      comentarios,
+      estudiante_id,
+      usuario_id
     } = req.body;
 
     // Buscar el último seguimiento del paciente para determinar el siguiente número de llamado
@@ -208,7 +243,9 @@ export const crearSeguimientoAdulto = async (req, res) => {
       autoeficacia: autoeficacia || {},
       otros_sintomas: otrosSintomas || '',
       manejo_sintomas: manejoSintomas || '',
-      comentarios: comentarios || ''
+      comentarios: comentarios || '',
+      estudiante_id: estudiante_id || null,
+      usuario_id: usuario_id || null
     };
 
     // Crear nuevo seguimiento
@@ -264,6 +301,16 @@ export const obtenerSeguimientosAdulto = async (req, res) => {
           model: PacienteAdulto,
           as: 'paciente_adulto',
           attributes: ['rut', 'nombres', 'apellidos', 'edad', 'fecha_nacimiento', 'telefono_principal','telefono_secundario']
+        },
+        {
+          model: Usuario,
+          as: 'usuario',
+          attributes: ['id', 'nombres', 'apellidos', 'rut', 'correo']
+        },
+        {
+          model: Estudiante,
+          as: 'estudiante',
+          attributes: ['id', 'nombres', 'apellidos','rut','correo']
         }
       ]
     });
@@ -288,27 +335,29 @@ export const obtenerSeguimientosAdulto = async (req, res) => {
 // En tu archivo de controladores (seguimientosController.js)
 export const obtenerSeguimientoAdultoPorId = async (req, res) => {
   try {
-      const { id } = req.params; // ID del seguimiento
-      const { pacienteId } = req.params; // Obtener el pacienteId de los parámetros de la URL
+      const { id, pacienteId } = req.params;
 
-      // Buscar el seguimiento por ID y pacienteId
       const seguimiento = await SeguimientoAdulto.findOne({
           where: {
-              id: parseInt(id, 10), // Asegúrate de que sea un número
-              paciente_id: parseInt(pacienteId, 10) // Asegúrate de que sea un número
+              id: parseInt(id, 10),
+              paciente_id: parseInt(pacienteId, 10)
           },
           include: [
-            {
-              model: PacienteAdulto,
-              as: 'paciente_adulto',
-              attributes: ['rut', 'nombres', 'apellidos', 'edad', 'fecha_nacimiento', 'telefono_principal','telefono_secundario']
-            },
-            {
-              model: Diagnostico,
-              as: 'diagnostico', // Asegúrate de que el alias coincida con tu definición de modelo
-              attributes: ['id', 'nombre'], // Ajusta los atributos según necesites
-              required: false
-            }
+              {
+                  model: PacienteAdulto,
+                  as: 'paciente_adulto',
+                  attributes: ['rut', 'nombres', 'apellidos', 'edad', 'fecha_nacimiento', 'telefono_principal', 'telefono_secundario']
+              },
+              {
+                model: Usuario,
+                as: 'usuario',
+                attributes: ['id', 'nombres', 'apellidos', 'rut', 'correo']
+              },
+              {
+                model: Estudiante,
+                as: 'estudiante',
+                attributes: ['id', 'nombres', 'apellidos','rut','correo']
+              }
           ]
       });
 

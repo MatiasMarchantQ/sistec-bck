@@ -15,18 +15,17 @@ import PadreTutor from '../models/PadreTutor.js';
 import TipoInstitucion from '../models/TipoInstitucion.js';
 import Institucion from '../models/Institucion.js';
 import Diagnostico from '../models/Diagnostico.js';
+import Usuario from '../models/Usuario.js';
 import sequelize from '../models/index.js';
 import { Op, Sequelize } from 'sequelize';
+import Estudiante from '../models/Estudiante.js';
 
 export const getFichasClinicasPorInstitucion = async (req, res) => {
     try {
         const { institucionId } = req.params;
         const { rol_id, estudiante_id } = req.user;
         
-        // Parámetros de paginación y búsqueda
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 15;
-        const offset = (page - 1) * limit;
+        // Parámetros de búsqueda
         const busqueda = req.query.search ? req.query.search.trim() : '';
 
         let whereClause = { institucion_id: institucionId };
@@ -85,9 +84,8 @@ export const getFichasClinicasPorInstitucion = async (req, res) => {
             })
         };
 
-
-        // Obtener fichas de adultos con paginación y búsqueda
-        const fichasAdultos = await FichaClinicaAdulto.findAndCountAll({
+        // Obtener todas las fichas de adultos
+        const fichasAdultos = await FichaClinicaAdulto.findAll({
             where: whereAdultos,
             include: [
                 {
@@ -95,59 +93,21 @@ export const getFichasClinicasPorInstitucion = async (req, res) => {
                     attributes: ['id', 'nombres', 'apellidos', 'rut', 'edad']
                 },
                 {
-                    model: NivelEscolaridad,
-                    attributes: ['nivel']
-                },
-                {
-                    model: CicloVitalFamiliar,
-                    through: FichaCicloVital,
-                    as: 'ciclosVitalesFamiliares'
-                },
-                {
-                    model: TipoFamilia,
-                    through: FichaTipoFamilia,
-                    as: 'tiposFamilia'
-                },
-                {
                     model: Diagnostico,
                     attributes: ['id', 'nombre'],
                     as: 'diagnostico'
                 },
             ],
-            order: [['fecha_evaluacion', 'DESC']],
-            limit,
-            offset
+            order: [['createdAt', 'DESC']]
         });
 
-        // Obtener fichas infantiles con paginación y búsqueda
-        const fichasInfantiles = await FichaClinicaInfantil.findAndCountAll({
+        // Obtener todas las fichas infantiles
+        const fichasInfantiles = await FichaClinicaInfantil.findAll({
             where: whereInfantiles,
             include: [
                 {
                     model: PacienteInfantil,
                     attributes: ['id', 'nombres', 'apellidos', 'rut', 'edad']
-                },
-                {
-                    model: CicloVitalFamiliar,
-                    through: FichaCicloVital,
-                    as: 'ciclosVitalesFamiliaresInfantil',
-                    attributes: ['ciclo']
-                },
-                {
-                    model: TipoFamilia,
-                    through: FichaTipoFamilia,
-                    as: 'tiposFamiliaInfantil',
-                    attributes: ['nombre']
-                },
-                {
-                    model: FactorRiesgoNino,
-                    through: FichaFactorRiesgoNino,
-                    as: 'factoresRiesgoNinoInfantil'
-                },
-                {
-                    model: FactorRiesgoFamiliar,
-                    through: FichaFactorRiesgoFamiliar,
-                    as: 'factoresRiesgoFamiliarInfantil'
                 },
                 {
                     model: PadreTutor,
@@ -158,13 +118,11 @@ export const getFichasClinicasPorInstitucion = async (req, res) => {
                     }]
                 }
             ],
-            order: [['createdAt', 'DESC']],
-            limit,
-            offset
+            order: [['createdAt', 'DESC']]
         });
         
         // Formatear fichas de adultos
-        const fichasAdultosFormateadas = fichasAdultos.rows.map(ficha => ({
+        const fichasAdultosFormateadas = fichasAdultos.map(ficha => ({
             id: ficha.id,
             tipo: 'adulto',
             fecha: ficha.fecha_evaluacion,
@@ -178,21 +136,12 @@ export const getFichasClinicasPorInstitucion = async (req, res) => {
                 id: ficha.diagnostico_id,
                 nombre: ficha.diagnostico && ficha.diagnostico.nombre ? ficha.diagnostico.nombre : ficha.diagnostico_otro,
             },
-            escolaridad: ficha.NivelEscolaridad?.nivel,
-            ocupacion: ficha.ocupacion,
-            factoresRiesgo: {
-                valorHbac1: ficha.valor_hbac1,
-                alcoholDrogas: ficha.alcohol_drogas,
-                tabaquismo: ficha.tabaquismo
-            },
-            ciclosVitalesFamiliares: ficha.ciclosVitalesFamiliares.map(c => c.ciclo),
-            tiposFamilia: ficha.tiposFamilia.map(t => t.nombre),
             createdAt: ficha.createdAt,
             updatedAt: ficha.updatedAt
         }));
 
         // Formatear fichas infantiles
-        const fichasInfantilesFormateadas = fichasInfantiles.rows.map(ficha => ({
+        const fichasInfantilesFormateadas = fichasInfantiles.map(ficha => ({
             id: ficha.id,
             tipo: 'infantil',
             fecha: ficha.createdAt,
@@ -206,41 +155,36 @@ export const getFichasClinicasPorInstitucion = async (req, res) => {
                 id: null,
                 nombre: ficha.diagnostico_dsm || 'Sin diagnóstico'
             },
-            puntajeDPM: ficha.puntaje_dpm,
-            conQuienVive: ficha.con_quien_vive,
-            tiposFamilia: ficha.tiposFamiliaInfantil.map(t => t.nombre),
-            ciclosVitalesFamiliares: ficha.ciclosVitalesFamiliaresInfantil.map(c => c.ciclo),
-            factoresRiesgoNino: ficha.factoresRiesgoNinoInfantil.map(f => f.nombre),
-            factoresRiesgoFamiliar: ficha.factoresRiesgoFamiliarInfantil.map(f => f.nombre),
             createdAt: ficha.createdAt,
             updatedAt: ficha.updatedAt
         }));
 
-        // Combinar y ordenar todas las fichas por fecha
-        const todasLasFichas = [...fichasAdultosFormateadas, ...fichasInfantilesFormateadas]
-            .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
-            .slice(0, limit);
+        // Combinar todas las fichas y eliminar duplicados
+        const todasLasFichas = [...fichasAdultosFormateadas, ...fichasInfantilesFormateadas];
+        const fichasUnicas = Array.from(new Map(todasLasFichas.map(ficha => [ficha.id, ficha])).values());
 
         // Calcular el total de registros
-        const totalAdultos = fichasAdultos.count;
-        const totalInfantiles = fichasInfantiles.count;
-        const totalRegistros = totalAdultos + totalInfantiles;
+        const totalRegistros = fichasUnicas.length;
+
+        // Parámetros de paginación
+        const page = Math.max(1, parseInt(req.query.page)) || 1; // Asegura que page sea al menos 1
+        const limit = parseInt(req.query.limit) || 2;
+        const offset = (page - 1) * limit; // Esto será 0 si page es 1
+
+        // Aplicar paginación
+        const paginadas = fichasUnicas.slice(offset, offset + limit);
 
         // Calcular información de paginación
         const totalPaginas = Math.ceil(totalRegistros / limit);
         const paginaActual = page;
-        const siguientePagina = paginaActual < totalPaginas ? paginaActual + 1 : null;
-        const paginaAnterior = paginaActual > 1 ? paginaActual - 1 : null;
 
         res.json({
             success: true,
-            data: todasLasFichas,
+            data: paginadas,
             pagination: {
                 totalRegistros,
                 totalPaginas,
                 paginaActual,
-                siguientePagina,
-                paginaAnterior,
                 registrosPorPagina: limit,
                 terminoBusqueda: busqueda
             }
@@ -274,7 +218,7 @@ export const createFichaClinicaAdulto = async (req, res) => {
             conQuienVive,
             tiposFamilia,
             tipoFamiliaOtro,
-            ciclosVitalesFamiliares,
+            ciclo_vital_familiar_id,
             telefonoPrincipal,
             telefonoSecundario,
             horarioLlamada,
@@ -350,6 +294,7 @@ export const createFichaClinicaAdulto = async (req, res) => {
             ocupacion,
             direccion,
             con_quien_vive: conQuienVive,
+            ciclo_vital_familiar_id,
             horario_llamada: horarioLlamada,
             conectividad,
             valor_hbac1: parseFloat(valorHbac1),
@@ -360,24 +305,6 @@ export const createFichaClinicaAdulto = async (req, res) => {
             usuario_id: usuario_id || null,
             institucion_id
         }, { transaction: t });
-
-        // Asociar ciclos vitales familiares
-        if (ciclosVitalesFamiliares && ciclosVitalesFamiliares.length > 0) {
-            const ciclosVitales = await CicloVitalFamiliar.findAll({
-                where: {
-                    id: ciclosVitalesFamiliares
-                },
-                transaction: t
-            });
-            
-            await Promise.all(ciclosVitales.map(ciclo => 
-                FichaCicloVital.create({
-                    ficha_clinica_id: fichaClinica.id,
-                    ciclo_vital_familiar_id: ciclo.id,
-                    tipo_ficha: 'adulto'
-                }, { transaction: t })
-            ));
-        }
 
         // Manejo de tipos de familia
         if (tiposFamilia && tiposFamilia.length > 0) {
@@ -398,7 +325,8 @@ export const createFichaClinicaAdulto = async (req, res) => {
             message: 'Ficha clínica creada exitosamente',
             data: {
                 fichaClinica,
-                paciente
+                paciente,
+                requestData: req.body
             }
         });
 
@@ -430,6 +358,7 @@ export const createFichaClinicaInfantil = async (req, res) => {
         padres,
         conQuienVive,
         tipoFamilia,
+        tipoFamiliaOtro,
         cicloVitalFamiliar,
         localidad,
         factoresRiesgoNino,
@@ -460,13 +389,20 @@ export const createFichaClinicaInfantil = async (req, res) => {
         puntaje_dpm: puntajeDPM,
         diagnostico_dsm: diagnosticoDSM,
         con_quien_vive: conQuienVive,
-        tipo_familia_id: tipoFamilia,
         ciclo_vital_familiar_id: cicloVitalFamiliar,
         localidad,
         estudiante_id,
         usuario_id,
         institucion_id
       }, { transaction: t });
+
+      // Guardar tipo de familia
+      await FichaTipoFamilia.create({
+        ficha_clinica_id: fichaClinica.id,
+        tipo_familia_id: tipoFamilia !== 'Otras' ? tipoFamilia : null, // Guardar ID o null
+        tipo_familia_otro: tipoFamilia === 'Otras' ? tipoFamiliaOtro : null, // Guardar el texto ingresado
+        tipo_ficha: 'infantil'
+    }, { transaction: t });
   
       // Guardar factores de riesgo del niño
     if (factoresRiesgoNino && factoresRiesgoNino.length > 0) {
@@ -476,36 +412,37 @@ export const createFichaClinicaInfantil = async (req, res) => {
         });
         await fichaClinica.setFactoresRiesgoNinoInfantil(factoresNino, { transaction: t });
       }
-  
-    // Guardar factores de riesgo familiares
-    if (factoresRiesgoFamiliares.seleccionados) {
-        for (const [factorId, isSelected] of Object.entries(factoresRiesgoFamiliares.seleccionados)) {
-        if (isSelected) {
-            const factor = await FactorRiesgoFamiliar.findByPk(factorId);
-            if (factor) {
-            await FichaFactorRiesgoFamiliar.create({
-                ficha_clinica_id: fichaClinica.id,
-                factor_riesgo_familiar_id: factorId,
-                otras: factor.nombre === 'Otras' ? factoresRiesgoFamiliares.otrasTexto : null
-            }, { transaction: t });
-            }
-        }
-        }
-    }
 
-    // Guardar otros factores de riesgo familiares si existen
-    if (otrosFactoresRiesgoFamiliares) {
-    const otroFactor = await FactorRiesgoFamiliar.findOne({
+      // Obtener el ID del factor "Otras"
+      const factorOtras = await FactorRiesgoFamiliar.findOne({
         where: { nombre: 'Otras' },
         transaction: t
     });
-    if (otroFactor) {
-        await FichaFactorRiesgoFamiliar.create({
-        ficha_clinica_id: fichaClinica.id,
-        factor_riesgo_familiar_id: otroFactor.id,
-        descripcion: otrosFactoresRiesgoFamiliares
-        }, { transaction: t });
+  
+    // Guardar factores de riesgo familiares
+    if (factoresRiesgoFamiliares && factoresRiesgoFamiliares.length > 0) {
+        for (const factorNombre of factoresRiesgoFamiliares) {
+            const factor = await FactorRiesgoFamiliar.findOne({
+                where: { nombre: factorNombre }
+            });
+
+            if (factor) {
+                await FichaFactorRiesgoFamiliar.create({
+                    ficha_clinica_id: fichaClinica.id,
+                    factor_riesgo_familiar_id: factor.id,
+                    otras: factor.nombre === 'Otras' ? otrosFactoresRiesgoFamiliares : null // Guardar el texto ingresado
+                }, { transaction: t });
+            }
+        }
     }
+
+    // Si hay un campo "Otras" que se está usando para texto adicional
+    if (otrosFactoresRiesgoFamiliares && otrosFactoresRiesgoFamiliares.trim() !== '') {
+        await FichaFactorRiesgoFamiliar.create({
+            ficha_clinica_id: fichaClinica.id,
+            factor_riesgo_familiar_id: factorOtras ? factorOtras.id : null, // No se asocia a un ID específico
+            otras: otrosFactoresRiesgoFamiliares // Guarda el texto ingresado
+        }, { transaction: t });
     }
   
     // Guardar información de los padres/tutores
@@ -527,7 +464,8 @@ export const createFichaClinicaInfantil = async (req, res) => {
       message: 'Ficha clínica infantil creada exitosamente',
       data: {
         fichaClinica,
-        paciente
+        paciente,
+        requestData: req.body
       }
     });
 
@@ -554,8 +492,8 @@ export const getFichaClinicaInfantil = async (req, res) => {
                 },
                 {
                     model: CicloVitalFamiliar,
-                    through: FichaCicloVital,
-                    as: 'ciclosVitalesFamiliaresInfantil'
+                    as: 'cicloVitalFamiliarInfantil',
+                    attributes: ['id', 'ciclo']
                 },
                 {
                     model: TipoFamilia,
@@ -585,7 +523,22 @@ export const getFichaClinicaInfantil = async (req, res) => {
                         model: NivelEscolaridad,
                         as: 'nivelEscolaridad'
                     }]
-                }
+                },
+                {
+                    model: Usuario,
+                    as: 'usuario',
+                    attributes: ['id', 'nombres', 'apellidos', 'correo']
+                },
+                {
+                    model: Estudiante,
+                    as: 'estudiante',
+                    attributes: ['id', 'nombres','apellidos', 'correo']
+                },
+                {
+                    model: Institucion,
+                    as: 'institucion',
+                    attributes: ['id', 'nombre']
+                },
             ]
         });
 
@@ -597,6 +550,10 @@ export const getFichaClinicaInfantil = async (req, res) => {
         }
 
         const fichaFormateada = formatearFichaInfantil(fichaClinica);
+
+        // Agregar un log para verificar la ficha formateada
+        console.log('Ficha clínica infantil formateada:', fichaFormateada);
+
 
         res.json({
             success: true,
@@ -706,9 +663,14 @@ export const getFichaClinica = async (req, res) => {
                         attributes: ['id', 'nombres', 'apellidos', 'rut', 'edad', 'telefono_principal', 'telefono_secundario']
                     },
                     {
+                        model: Diagnostico,
+                        as: 'diagnostico',
+                        attributes: ['id', 'nombre'],
+                    },
+                    {
                         model: CicloVitalFamiliar,
-                        through: FichaCicloVital,
-                        as: 'ciclosVitalesFamiliares'
+                        as: 'cicloVitalFamiliarAdulto',
+                        attributes: ['id', 'ciclo']
                     },
                     {
                         model: TipoFamilia,
@@ -718,6 +680,21 @@ export const getFichaClinica = async (req, res) => {
                     {
                         model: NivelEscolaridad,
                         as: 'NivelEscolaridad'
+                    },
+                    {
+                        model: Usuario,
+                        as: 'usuario',
+                        attributes: ['id', 'nombres', 'apellidos', 'correo']
+                    },
+                    {
+                        model: Estudiante,
+                        as: 'estudiante',
+                        attributes: ['id', 'nombres','apellidos', 'correo']
+                    },
+                    {
+                        model: Institucion,
+                        as: 'institucion',
+                        attributes: ['id', 'nombre']
                     }
                 ]
             });
@@ -734,13 +711,17 @@ export const getFichaClinica = async (req, res) => {
                     },
                     {
                         model: CicloVitalFamiliar,
-                        through: FichaCicloVital,
-                        as: 'ciclosVitalesFamiliaresInfantil'
+                        as: 'cicloVitalFamiliarInfantil',
+                        attributes: ['id', 'ciclo']
                     },
                     {
-                        model: TipoFamilia,
-                        through: FichaTipoFamilia,
-                        as: 'tiposFamiliaInfantil'
+                        model: FichaTipoFamilia,
+                        as: 'fichasTipoFamiliaInfantiles',
+                        include: [{
+                            model: TipoFamilia,
+                            as: 'tipoFamiliaInfantil', // Aquí se usa el alias correcto
+                            attributes: ['id', 'nombre'] // Agrega los atributos que necesites
+                        }]
                     },
                     {
                         model: FactorRiesgoNino,
@@ -765,6 +746,21 @@ export const getFichaClinica = async (req, res) => {
                             model: NivelEscolaridad,
                             as: 'nivelEscolaridad'
                         }]
+                    },
+                    {
+                        model: Usuario,
+                        as: 'usuario',
+                        attributes: ['id', 'nombres', 'apellidos', 'correo']
+                    },
+                    {
+                        model: Estudiante,
+                        as: 'estudiante',
+                        attributes: ['id', 'nombres','apellidos', 'correo']
+                    },
+                    {
+                        model: Institucion,
+                        as: 'institucion',
+                        attributes: ['id', 'nombre']
                     }
                 ]
             });
@@ -809,7 +805,10 @@ function formatearFichaAdulto(fichaClinica) {
             telefonoPrincipal: fichaClinica.PacienteAdulto.telefono_principal,
             telefonoSecundario: fichaClinica.PacienteAdulto.telefono_secundario
         },
-        diagnostico: fichaClinica.diagnostico,
+        diagnostico: {
+            id: fichaClinica.diagnostico_id,
+            nombre: fichaClinica.diagnostico && fichaClinica.diagnostico.nombre ? fichaClinica.diagnostico.nombre : fichaClinica.diagnostico_otro,
+        },
         escolaridad: {
             id: fichaClinica.NivelEscolaridad?.id,
             nivel: fichaClinica.NivelEscolaridad?.nivel
@@ -822,19 +821,35 @@ function formatearFichaAdulto(fichaClinica) {
         factoresRiesgo: {
             valorHbac1: fichaClinica.valor_hbac1,
             alcoholDrogas: fichaClinica.alcohol_drogas,
-            tabaquismo: fichaClinica.tabaquismo
+            tabaquismo: fichaClinica.tabaquismo,
+            otros: fichaClinica.otros_factores
         },
-        ciclosVitalesFamiliares: fichaClinica.ciclosVitalesFamiliares.map(c => ({
-            id: c.id,
-            ciclo: c.ciclo
-        })),
+        cicloVitalFamiliar: fichaClinica.cicloVitalFamiliarAdulto
+                ? {
+                    id: fichaClinica.cicloVitalFamiliarAdulto?.id,
+                    ciclo: fichaClinica.cicloVitalFamiliarAdulto?.ciclo
+                } 
+                : null,
         tiposFamilia: fichaClinica.tiposFamilia.map(t => ({
             id: t.id,
             nombre: t.nombre
         })),
-        estudiante_id: fichaClinica.estudiante_id,
-        usuario_id: fichaClinica.usuario_id,
-        institucion_id: fichaClinica.institucion_id,
+        estudiante: fichaClinica.estudiante ? {
+            id: fichaClinica.estudiante.id,
+            nombres: fichaClinica.estudiante.nombres,
+            apellidos: fichaClinica.estudiante.apellidos,
+            email: fichaClinica.estudiante.email
+        } : null,
+        usuario: fichaClinica.usuario ? {
+            id: fichaClinica.usuario.id,
+            nombres: fichaClinica.usuario.nombres,
+            apellidos: fichaClinica.usuario.apellidos,
+            email: fichaClinica.usuario.email
+        } : null,
+        institucion: fichaClinica.institucion ? {
+            id: fichaClinica.institucion.id,
+            nombre: fichaClinica.institucion.nombre
+        } : null,
         createdAt: fichaClinica.createdAt,
         updatedAt: fichaClinica.updatedAt
     };
@@ -844,13 +859,13 @@ function formatearFichaInfantil(fichaClinica) {
     return {
         id: fichaClinica.id,
         paciente: {
-            id: fichaClinica.PacienteInfantil.id,
-            nombres: fichaClinica.PacienteInfantil.nombres,
-            apellidos: fichaClinica.PacienteInfantil.apellidos,
-            rut: fichaClinica.PacienteInfantil.rut,
-            edad: fichaClinica.PacienteInfantil.edad,
-            telefonoPrincipal: fichaClinica.PacienteInfantil.telefono_principal,
-            telefonoSecundario: fichaClinica.PacienteInfantil.telefono_secundario
+            id: fichaClinica.PacienteInfantil?.id,
+            nombres: fichaClinica.PacienteInfantil?.nombres,
+            apellidos: fichaClinica.PacienteInfantil?.apellidos,
+            rut: fichaClinica.PacienteInfantil?.rut,
+            edad: fichaClinica.PacienteInfantil?.edad,
+            telefonoPrincipal: fichaClinica.PacienteInfantil?.telefono_principal,
+            telefonoSecundario: fichaClinica.PacienteInfantil?.telefono_secundario
         },
         evaluacionPsicomotora: {
             puntajeDPM: fichaClinica.puntaje_dpm,
@@ -858,25 +873,25 @@ function formatearFichaInfantil(fichaClinica) {
         },
         informacionFamiliar: {
             conQuienVive: fichaClinica.con_quien_vive,
-            tipoFamilia: fichaClinica.tiposFamiliaInfantil.length > 0 
+            tiposFamilia: (fichaClinica.fichasTipoFamiliaInfantiles || []).map(t => {
+                return {
+                    id: t.id || null,
+                    nombre: t.tipoFamiliaInfantil?.nombre || (t.tipo_familia_otro ? t.tipo_familia_otro : 'No especificado')
+                };
+            }),
+            cicloVitalFamiliar: fichaClinica.cicloVitalFamiliarInfantil 
                 ? {
-                    id: fichaClinica.tiposFamiliaInfantil[0].id,
-                    nombre: fichaClinica.tiposFamiliaInfantil[0].nombre
+                    id: fichaClinica.cicloVitalFamiliarInfantil?.id,
+                    ciclo: fichaClinica.cicloVitalFamiliarInfantil?.ciclo
                 } 
-                : {},
-            cicloVitalFamiliar: fichaClinica.ciclosVitalesFamiliaresInfantil.length > 0 
-                ? {
-                    id: fichaClinica.ciclosVitalesFamiliaresInfantil[0].id,
-                    ciclo: fichaClinica.ciclosVitalesFamiliaresInfantil[0].ciclo
-                } 
-                : {},
+                : null, // Cambiado a null si no hay ciclo vital familiar
             localidad: fichaClinica.localidad,
             padres: fichaClinica.padresTutores.map(padre => ({
                 id: padre.id,
                 nombre: padre.nombre,
                 escolaridad: {
-                  id: padre.nivelEscolaridad?.id,
-                  nivel: padre.nivelEscolaridad?.nivel 
+                    id: padre.nivelEscolaridad?.id,
+                    nivel: padre.nivelEscolaridad?.nivel 
                 },
                 ocupacion: padre.ocupacion
             }))
@@ -887,16 +902,27 @@ function formatearFichaInfantil(fichaClinica) {
                 nombre: factor.nombre
             })),
             familiares: fichaClinica.factoresRiesgoFamiliar.map(factor => ({
-                id: factor.id,
-                nombre: factor.nombre,
-                otras: factor.FichaFactorRiesgoFamiliar?.otras 
-                    ? factor.FichaFactorRiesgoFamiliar.otras 
-                    : null
+                id: factor.id || null, // Asigna el id si existe, de lo contrario null
+                nombre: factor.nombre || null,
+                otras: factor.FichaFactorRiesgoFamiliar?.otras || null // Usa 'nombre' si 'id' existe, de lo contrario usa 'otras'
             }))
         },
-        estudiante_id: fichaClinica.estudiante_id,
-        usuario_id: fichaClinica.usuario_id,
-        institucion_id: fichaClinica.institucion_id,
+        estudiante: fichaClinica.estudiante ? {
+            id: fichaClinica.estudiante.id,
+            nombres: fichaClinica.estudiante.nombres,
+            apellidos: fichaClinica.estudiante.apellidos,
+            email: fichaClinica.estudiante.email
+        } : null,
+        usuario: fichaClinica.usuario ? {
+            id: fichaClinica.usuario.id,
+            nombres: fichaClinica.usuario.nombres,
+            apellidos: fichaClinica.usuario.apellidos,
+            correo: fichaClinica.usuario.correo
+        } : null,
+        institucion: fichaClinica.institucion ? {
+            id: fichaClinica.institucion.id,
+            nombre: fichaClinica.institucion.nombre
+        } : null,
         createdAt: fichaClinica.createdAt,
         updatedAt: fichaClinica.updatedAt
     };
@@ -988,7 +1014,7 @@ export const obtenerFichasClinicas = async (req, res) => {
             textoBusqueda, 
             tipoFicha, 
             pagina = 1, 
-            limite = 10 
+            limite = 2
         } = req.query;
 
         // Condiciones base
