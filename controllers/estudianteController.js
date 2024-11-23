@@ -443,15 +443,13 @@ export const obtenerEstudiantes = async (req, res) => {
       
       const siguienteId = ultimoEstudiante ? ultimoEstudiante.id + 1 : 1;
   
-      const hashedPassword = await bcrypt.hash(contrasena, 10);
-  
       const nuevoEstudiante = await Estudiante.create({
         id: siguienteId,
         nombres,
         apellidos,
         rut,
         correo,
-        contrasena: hashedPassword,
+        contrasena,
         debe_cambiar_contrasena: true,
         estado: true,
         contador_registros: 1,

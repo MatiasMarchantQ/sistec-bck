@@ -115,6 +115,10 @@ FichaClinicaAdulto.init({
       key: 'id'
     },
     allowNull: false
+  },
+  is_reevaluacion: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
   }
 }, {
   sequelize,

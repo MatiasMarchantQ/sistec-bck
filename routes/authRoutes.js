@@ -4,7 +4,8 @@ import {
   obtenerUsuarios, 
   obtenerUsuarioPorId, 
   crearUsuario, 
-  login, 
+  login,
+  loginDirectores,
   refreshToken,
   logout,
   cambiarContrasena,
@@ -19,6 +20,8 @@ const router = express.Router();
 
 // Rutas de autenticación
 router.post('/login', login);
+router.post('/login/directores', loginDirectores);
+
 router.post('/refresh-token', refreshToken);
 router.post('/logout', verifyToken, logout);
 router.post('/cambiar-contrasena', verifyToken, cambiarContrasena);

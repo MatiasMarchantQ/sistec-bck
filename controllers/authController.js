@@ -109,7 +109,8 @@ export const crearUsuario = async (req, res) => {
 export const login = async (req, res) => {
   try {
     const { rut, contrasena, rememberMe } = req.body;
-    
+    console.log('Datos de entrada:', { rut, contrasena, rememberMe });
+
     // Validar que se proporcionen RUT y contraseña
     if (!rut || !contrasena) {
       return res.status(400).json({ 
@@ -118,31 +119,107 @@ export const login = async (req, res) => {
       });
     }
 
-    // Búsqueda para Usuario
-    let user = await Usuario.findOne({ 
-      where: sequelize.where(
-        sequelize.col('rut'),
-        { [Op.regexp]: `^${rut}-[0-9kK]$` }
-      ),
-      include: [{
-        model: Rol,
-        attributes: ['id', 'nombre']
-      }]
+    let user;
+
+    // Primero, intenta encontrar al estudiante
+    user = await Estudiante.findOne({
+      where: { rut: rut },
+      include: [{ model: Rol, attributes: ['id', 'nombre'] }]
     });
 
+    // Si no se encuentra, intenta encontrar al usuario (rol_id 1 o 2)
     if (!user) {
-      // Búsqueda para Estudiante
-      user = await Estudiante.findOne({
-        where: sequelize.where(
-          sequelize.fn('SUBSTRING_INDEX', sequelize.col('rut'), '-', 1),
-          rut
-        ),
-        include: [{
-          model: Rol,
-          attributes: ['id', 'nombre']
-        }]
+      user = await Usuario.findOne({
+        where: { rut: { [Op.regexp]: `^${rut}$` } },
+        include: [{ model: Rol, attributes: ['id', 'nombre'] }]
       });
     }
+
+    // Verificar si el usuario existe
+    if (!user) {
+      return res.status(404).json({ 
+        error: 'Usuario no encontrado',
+        code: 'USER_NOT_FOUND'
+      });
+    }
+
+    // Verificar estado del usuario
+    if (!user.estado) {
+      return res.status(403).json({ 
+        error: 'Cuenta desactivada',
+        code: 'ACCOUNT_DISABLED'
+      });
+    }
+
+    // Validar contraseña
+    let validPassword = await bcrypt.compare(contrasena, user.contrasena);
+
+    if (!validPassword) {
+      return res.status(401).json({ 
+        error: 'Contraseña incorrecta',
+        code: 'INVALID_PASSWORD'
+      });
+    }
+
+    // Verificar bloqueos o intentos de inicio de sesión (si aplica)
+    if (user.intentos_fallidos >= 3) {
+      return res.status(403).json({ 
+        error: 'Cuenta bloqueada temporalmente',
+        code: 'ACCOUNT_LOCKED',
+        desbloqueado_en: user.bloqueado_hasta
+      });
+    }
+
+    // Generar tokens
+    const { accessToken, refreshToken } = generateTokens(user, rememberMe, user instanceof Estudiante ? user.id : null);
+
+    // Restablecer intentos fallidos
+    await user.update({ 
+      refresh_token: refreshToken,
+      intentos_fallidos: 0,
+      bloqueado_hasta: null
+    });
+
+    res.json({ 
+      accessToken, 
+      refreshToken,
+      expiresIn: rememberMe ? '7d' : '1h',
+      nombres: user.nombres,
+      debe_cambiar_contrasena: Boolean(user.debe_cambiar_contrasena),
+      usuario_id: user instanceof Estudiante ? null : user.id,
+      estudiante_id: user instanceof Estudiante ? user.id : null,
+      rol_id: user.Rol.id,
+      rol_nombre: user.Rol.nombre
+    });
+  } catch (error) {
+    console.error('Error en login:', error);
+    res.status(500).json({ 
+      error: 'Error interno del servidor', 
+      code: 'SERVER_ERROR',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// En tu controlador de autenticación
+
+export const loginDirectores = async (req, res) => {
+  try {
+    const { rut, contrasena, rememberMe } = req.body;
+
+    // Validar que se proporcionen RUT y contraseña
+    if (!rut || !contrasena) {
+      return res.status(400).json({ 
+        error: 'RUT y contraseña son obligatorios',
+        code: 'MISSING_CREDENTIALS'
+      });
+    }
+
+    // Buscar solo en la tabla de Usuarios
+    const user = await Usuario.findOne({
+      where: { rut: { [Op.regexp]: `^${rut}$` } },
+      include: [{ model: Rol, attributes: ['id', 'nombre'] }]
+    });
 
     // Verificar si el usuario existe
     if (!user) {
@@ -169,17 +246,8 @@ export const login = async (req, res) => {
       });
     }
 
-    // Verificar bloqueos o intentos de inicio de sesión (si aplica)
-    if (user.intentos_fallidos >= 3) {
-      return res.status(403).json({ 
-        error: 'Cuenta bloqueada temporalmente',
-        code: 'ACCOUNT_LOCKED',
-        desbloqueado_en: user.bloqueado_hasta
-      });
-    }
-
-    const isEstudiante = user instanceof Estudiante;
-    const { accessToken, refreshToken } = generateTokens(user, rememberMe, isEstudiante ? user.id : null);
+    // Generar tokens
+    const { accessToken, refreshToken } = generateTokens(user, rememberMe);
 
     // Restablecer intentos fallidos
     await user.update({ 
@@ -194,13 +262,12 @@ export const login = async (req, res) => {
       expiresIn: rememberMe ? '7d' : '1h',
       nombres: user.nombres,
       debe_cambiar_contrasena: Boolean(user.debe_cambiar_contrasena),
-      usuario_id: isEstudiante ? null : user.id,
-      estudiante_id: isEstudiante ? user.id : null,
+      usuario_id: user.id,
       rol_id: user.Rol.id,
       rol_nombre: user.Rol.nombre
     });
   } catch (error) {
-    console.error('Error en login:', error);
+    console.error('Error en login de directores:', error);
     res.status(500).json({ 
       error: 'Error interno del servidor', 
       code: 'SERVER_ERROR',
