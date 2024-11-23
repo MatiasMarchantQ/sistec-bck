@@ -25,13 +25,42 @@ export const getFichasClinicasPorInstitucion = async (req, res) => {
         const { institucionId } = req.params;
         const { rol_id, estudiante_id } = req.user;
 
-        // Parámetros de búsqueda
+        // Parámetros de búsqueda y paginación
         const busqueda = req.query.search ? req.query.search.trim() : '';
+        const page = Math.max(1, parseInt(req.query.page)) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const offset = (page - 1) * limit;
+
+        // Parámetros adicionales del segundo controlador
+        const { 
+            fechaInicio, 
+            fechaFin,
+            isReevaluacion 
+        } = req.query;
 
         let whereClause = { institucion_id: institucionId };
 
         if (rol_id === 3) {
             whereClause.estudiante_id = estudiante_id;
+        }
+
+        // Construcción de whereClause con condiciones adicionales
+        if (fechaInicio && fechaFin) {
+            whereClause.fecha = {
+                [Op.between]: [fechaInicio, fechaFin]
+            };
+        } else if (fechaInicio) {
+            whereClause.fecha = {
+                [Op.gte]: fechaInicio
+            };
+        } else if (fechaFin) {
+            whereClause.fecha = {
+                [Op.lte]: fechaFin
+            };
+        }
+
+        if (isReevaluacion !== undefined && isReevaluacion !== '') {
+            whereClause.is_reevaluacion = isReevaluacion === 'true';
         }
 
         // Preparar condiciones de búsqueda para pacientes adultos
@@ -168,11 +197,6 @@ export const getFichasClinicasPorInstitucion = async (req, res) => {
         // Calcular el total de registros
         const totalRegistros = todasLasFichas.length;
 
-        // Parámetros de paginación
-        const page = Math.max(1, parseInt(req.query.page)) || 1; // Asegura que page sea al menos 1
-        const limit = parseInt(req.query.limit) || 10; // Cambiar a 10 para el límite
-        const offset = (page - 1) * limit; // Esto será 0 si page es 1
-
         // Aplicar paginación
         const paginadas = todasLasFichas.slice(offset, offset + limit);
 
@@ -195,7 +219,7 @@ export const getFichasClinicasPorInstitucion = async (req, res) => {
     } catch (error) {
         console.error('Error al obtener fichas clínicas:', error);
         res.status(500).json({
-            success: false,
+             success: false,
             message: 'Error al obtener las fichas clínicas',
             error: error.message
         });

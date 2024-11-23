@@ -2,6 +2,7 @@ import express from 'express';
 import { verifyToken } from '../middleware/authMiddleware.js'; // Asegúrate de que la ruta sea correcta
 import {
   obtenerAsignaciones,
+  obtenerInstitucionesConAsignaciones,
   crearAsignacion,
   actualizarAsignacion,
   eliminarAsignacion,
@@ -13,6 +14,8 @@ const router = express.Router();
 
 // Obtener todas las asignaciones
 router.get('/', verifyToken, obtenerAsignaciones);
+
+router.get('/instituciones-con-asignaciones', verifyToken, obtenerInstitucionesConAsignaciones);
 
 // Crear una nueva asignación
 router.post('/', verifyToken, crearAsignacion);

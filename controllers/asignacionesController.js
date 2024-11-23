@@ -3,41 +3,87 @@ import Asignacion from '../models/Asignacion.js';
 import Estudiante from '../models/Estudiante.js';
 import Institucion from '../models/Institucion.js';
 import Receptor from '../models/Receptor.js';
-import { Op } from 'sequelize';
+import { Op, Sequelize } from 'sequelize';
 
 // Obtener todas las asignaciones
 export const obtenerAsignaciones = async (req, res) => {
   try {
-    const { page = 1, limit = 10, search = '' } = req.query;
+    const { 
+      page = 1, 
+      limit = 5, 
+      search = '', 
+      month, 
+      year,
+      estudiante_id // Este será una cadena de IDs separados por comas
+    } = req.query;
+    
     const offset = (page - 1) * limit;
 
+    // Construir where clause base
     let whereClause = {};
 
-    if (search) {
+    // Filtrar por mes y año si se proporcionan
+    if (month && year) {
       whereClause = {
         [Op.or]: [
-          { '$Estudiante.nombres$': { [Op.like]: `%${search}%` } },
-          { '$Estudiante.apellidos$': { [Op.like]: `%${search}%` } },
-          { '$Institucion.nombre$': { [Op.like]: `%${search}%` } },
+          {
+            [Op.and]: [
+              Sequelize.where(Sequelize.fn('MONTH', Sequelize.col('fecha_inicio')), month),
+              Sequelize.where(Sequelize.fn('YEAR', Sequelize.col('fecha_inicio')), year)
+            ]
+          },
+          {
+            [Op.and]: [
+              Sequelize.where(Sequelize.fn('MONTH', Sequelize.col('fecha_fin')), month),
+              Sequelize.where(Sequelize.fn('YEAR', Sequelize.col('fecha_fin')), year)
+            ]
+          }
         ]
       };
     }
 
-    const { count, rows } = await Asignacion.findAndCountAll({
+    // Filtrar por estudiante_id si se proporciona
+    if (estudiante_id) {
+      // Convertir la cadena de IDs en un array y filtrar
+      const estudianteIds = estudiante_id.split(',').map(id => parseInt(id));
+      whereClause = {
+        ...whereClause,
+        estudiante_id: {
+          [Op.in]: estudianteIds // Usar Op.in para buscar en el array
+        }
+      };
+    }
+
+    // Configurar las opciones de búsqueda
+    const queryOptions = {
       where: whereClause,
       include: [
-        { model: Estudiante, attributes: ['nombres', 'apellidos'] },
         { 
-          model: Institucion, 
-          attributes: ['nombre'],
-          include: [{ model: Receptor, attributes: ['nombre'], as: 'receptores' }]
+          model: Estudiante,
+          attributes: ['id', 'nombres', 'apellidos', 'rut'],
+          where: search ? {
+            [Op.or]: [
+              { nombres: { [Op.like]: `%${search}%` } },
+              { apellidos: { [Op.like]: `%${search}%` } },
+              { rut: { [Op.like]: `%${search}%` } }
+            ]
+          } : undefined
         },
-        { model: Receptor, attributes: ['id', 'nombre', 'cargo'] }
+        { 
+          model: Institucion,
+          attributes: ['id', 'nombre']
+        },
+        { 
+          model: Receptor,
+          attributes: ['id', 'nombre', 'cargo'],
+        }
       ],
       offset: Number(offset),
       limit: Number(limit),
-      order: [['fecha_inicio', 'DESC']]
-    });
+      order: [['fecha_inicio', 'ASC']]
+    };
+
+    const { count, rows } = await Asignacion.findAndCountAll(queryOptions);
 
     return res.json({
       total: count,
@@ -48,14 +94,73 @@ export const obtenerAsignaciones = async (req, res) => {
 
   } catch (error) {
     console.error('Error al obtener asignaciones:', error);
-    return res.status(500).json({ 
-      message: 'Error al obtener asignaciones', 
-      error: error.message 
+    return res.status(500).json({
+      message: 'Error al obtener asignaciones',
+      error: error.message
     });
   }
 };
 
+export const obtenerInstitucionesConAsignaciones = async (req, res) => {
+  try {
+    const { 
+      page = 1, 
+      limit = 6, // Número de instituciones por página
+      search = '', 
+      month, 
+      year 
+    } = req.query;
 
+    const offset = (page - 1) * limit;
+
+    // Configurar las opciones de búsqueda para instituciones
+    const institutionQueryOptions = {
+      where: search ? {
+        nombre: { [Op.like]: `%${search}%` }
+      } : undefined,
+      limit: Number(limit),
+      offset: Number(offset)
+    };
+
+    // Obtener instituciones paginadas
+    const { count, rows: instituciones } = await Institucion.findAndCountAll(institutionQueryOptions);
+
+    // Obtener asignaciones para las instituciones obtenidas
+    const institucionesConAsignaciones = await Promise.all(instituciones.map(async (institucion) => {
+      const asignaciones = await Asignacion.findAll({
+        where: {
+          institucion_id: institucion.id,
+          ...(month && year ? {
+            [Op.and]: [
+              Sequelize.where(Sequelize.fn('MONTH', Sequelize.col('fecha_inicio')), month),
+              Sequelize.where(Sequelize.fn('YEAR', Sequelize.col('fecha_inicio')), year)
+            ]
+          } : {})
+        },
+        include: [
+          { model: Estudiante, attributes: ['id', 'nombres', 'apellidos', 'rut'] },
+          { model: Receptor, attributes: ['id', 'nombre', 'cargo'] }
+        ],
+        order: [['fecha_inicio', 'ASC']]
+      });
+      return { ...institucion.toJSON(), asignaciones }; // Combina institución y sus asignaciones
+    }));
+
+    return res.json({
+      total: count,
+      instituciones: institucionesConAsignaciones,
+      totalPages: Math.ceil(count / limit),
+      currentPage: Number(page)
+    });
+
+  } catch (error) {
+    console.error('Error al obtener instituciones con asignaciones:', error);
+    return res.status(500).json({
+      message: 'Error al obtener instituciones con asignaciones',
+      error: error.message
+    });
+  }
+};
 
 // Crear una nueva asignación
 export const crearAsignacion = async (req, res) => {

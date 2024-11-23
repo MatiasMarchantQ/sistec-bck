@@ -142,21 +142,34 @@ export const enviarCredencialIndividual = async (req, res) => {
       return res.status(404).json({ error: 'Estudiante no encontrado' });
     }
 
-    // Generar contraseña temporal
-    const contrasenatemporal = generarContrasenaTemporalSegura();
+    // Determinar la contraseña a usar
+    let contrasenatemporal;
 
-    // Actualizar contraseña del estudiante
-    await estudiante.update({
-      contrasena: contrasenatemporal,
-      debe_cambiar_contrasena: true
-    });
+    // Si no tiene contraseña o está marcado para cambiar contraseña
+    if (!estudiante.contrasena || estudiante.debe_cambiar_contrasena) {
+      // Generar contraseña temporal
+      contrasenatemporal = generarContrasenaTemporalSegura();
+      
+      // Actualizar contraseña del estudiante
+      await estudiante.update({
+        contrasena: contrasenatemporal,
+        debe_cambiar_contrasena: true
+      });
+    } else {
+      // Usar la contraseña existente
+      contrasenatemporal = estudiante.contrasena;
+    }
 
     // Enviar credenciales
     await enviarCredencialesEstudiante(estudiante, contrasenatemporal);
 
     res.status(200).json({ 
       mensaje: 'Credenciales enviadas exitosamente',
-      correo: estudiante.correo
+      correo: estudiante.correo,
+      rut: estudiante.rut,
+      nombres: estudiante.nombres,
+      apellidos: estudiante.apellidos,
+      debe_cambiar_contrasena: estudiante.debe_cambiar_contrasena
     });
   } catch (error) {
     console.error('Error al enviar credenciales:', error);
