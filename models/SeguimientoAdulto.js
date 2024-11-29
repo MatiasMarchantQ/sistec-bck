@@ -23,11 +23,7 @@ SeguimientoAdulto.init({
   },
   numero_llamado: {
     type: DataTypes.INTEGER,
-    allowNull: false,
-    validate: {
-      min: 1,
-      max: 6
-    }
+    allowNull: false
   },
   es_llamado_final: {
     type: DataTypes.BOOLEAN,

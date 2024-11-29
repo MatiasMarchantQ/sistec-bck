@@ -13,11 +13,13 @@ export const obtenerAsignaciones = async (req, res) => {
       limit = 5, 
       search = '', 
       month, 
-      year,
-      estudiante_id // Este será una cadena de IDs separados por comas
+      year
     } = req.query;
     
     const offset = (page - 1) * limit;
+
+    // Obtener información del usuario desde el token
+    const { rol_id, id: usuarioId, estudiante_id } = req.user;
 
     // Construir where clause base
     let whereClause = {};
@@ -42,16 +44,9 @@ export const obtenerAsignaciones = async (req, res) => {
       };
     }
 
-    // Filtrar por estudiante_id si se proporciona
-    if (estudiante_id) {
-      // Convertir la cadena de IDs en un array y filtrar
-      const estudianteIds = estudiante_id.split(',').map(id => parseInt(id));
-      whereClause = {
-        ...whereClause,
-        estudiante_id: {
-          [Op.in]: estudianteIds // Usar Op.in para buscar en el array
-        }
-      };
+    // Si el rol es de estudiante (rol_id === 3), solo mostrar sus asignaciones
+    if (rol_id === 3) {
+      whereClause.estudiante_id = estudiante_id;
     }
 
     // Configurar las opciones de búsqueda

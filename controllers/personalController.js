@@ -2,7 +2,87 @@
 import Usuario from '../models/Usuario.js';
 import Rol from '../models/Rol.js';
 import bcrypt from 'bcrypt';
+import { enviarCredencialesUsuario } from '../services/emailService.js';
 import { Op } from 'sequelize';
+
+const generarContrasenaTemporalSegura = () => {
+  const caracteres = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()';
+  const longitudContrasena = 12;
+  let contrasena = '';
+  
+  for (let i = 0; i < longitudContrasena; i++) {
+    const indiceAleatorio = Math.floor(Math.random() * caracteres.length);
+    contrasena += caracteres[indiceAleatorio];
+  }
+  
+  return contrasena;
+};
+
+export const enviarCredencialIndividual = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const usuario = await Usuario.findByPk(id);
+    if (!usuario) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    // Generar SIEMPRE una nueva contraseña temporal
+    const contrasenatemporal = generarContrasenaTemporalSegura();
+
+    // Actualizar la contraseña en la base de datos
+    await usuario.update({
+      contrasena: contrasenatemporal,
+      debe_cambiar_contrasena: true
+    });
+
+    // Enviar credenciales con la nueva contraseña temporal
+    await enviarCredencialesUsuario(usuario, contrasenatemporal);
+
+    res.status(200).json({
+      mensaje: 'Credenciales enviadas exitosamente',
+      correo: usuario.correo,
+      nombres: usuario.nombres,
+      apellidos: usuario.apellidos,
+      debe_cambiar_contrasena: true // Siempre será true al generar nueva contraseña
+    });
+  } catch (error) {
+    console.error('Error al enviar credenciales:', error);
+    res.status(500).json({
+      error: 'Error al enviar credenciales',
+      detalles: error.message
+    });
+  }
+};
+
+export const cambiarContrasenaUsuario = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { nuevaContrasena } = req.body;
+
+    const usuario = await Usuario.findByPk(id);
+    if (!usuario) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    // Actualizar contraseña sin hashear
+    await usuario.update({
+      contrasena: nuevaContrasena,
+      debe_cambiar_contrasena: false
+    });
+
+    // // Enviar correo de notificación con la nueva contraseña
+    // await enviarCredencialesUsuario(usuario, nuevaContrasena);
+
+    res.status(200).json({ mensaje: 'Contraseña cambiada exitosamente' });
+  } catch (error) {
+    console.error('Error al cambiar contraseña:', error);
+    res.status(500).json({
+      error: 'Error al cambiar contraseña',
+      detalles: error.message
+    });
+  }
+};
 
 export const obtenerPersonal = async (req, res) => {
   const { page = 1, limit = 10, tipo, search, estado = 'activos' } = req.query;

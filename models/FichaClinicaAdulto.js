@@ -119,6 +119,14 @@ FichaClinicaAdulto.init({
   is_reevaluacion: {
     type: DataTypes.BOOLEAN,
     defaultValue: false
+  },
+  ficha_original_id: { // Nuevo campo para referencia a la ficha original
+    type: DataTypes.INTEGER,
+    references: {
+        model: FichaClinicaAdulto,
+        key: 'id'
+    },
+    allowNull: true
   }
 }, {
   sequelize,

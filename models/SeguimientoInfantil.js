@@ -53,7 +53,7 @@ const SeguimientoInfantil = sequelize.define('SeguimientoInfantil', {
   },
   usuario_id: {
     type: DataTypes.INTEGER,
-    allowNull: false
+    allowNull: true
   },
   estudiante_id: {
     type: DataTypes.INTEGER,

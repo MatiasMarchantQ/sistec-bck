@@ -120,8 +120,8 @@ export const cambiarContrasenaEstudiante = async (req, res) => {
       debe_cambiar_contrasena: false
     });
 
-    // Enviar correo de notificación con la nueva contraseña
-    await enviarCredencialesEstudiante(estudiante, nuevaContrasena);
+    // // Enviar correo de notificación con la nueva contraseña
+    // await enviarCredencialesEstudiante(estudiante, nuevaContrasena);
 
     res.status(200).json({ mensaje: 'Contraseña cambiada exitosamente' });
   } catch (error) {
@@ -142,25 +142,21 @@ export const enviarCredencialIndividual = async (req, res) => {
       return res.status(404).json({ error: 'Estudiante no encontrado' });
     }
 
-    // Determinar la contraseña a usar
-    let contrasenatemporal;
-
-    // Si no tiene contraseña o está marcado para cambiar contraseña
-    if (!estudiante.contrasena || estudiante.debe_cambiar_contrasena) {
-      // Generar contraseña temporal
-      contrasenatemporal = generarContrasenaTemporalSegura();
-      
-      // Actualizar contraseña del estudiante
-      await estudiante.update({
-        contrasena: contrasenatemporal,
-        debe_cambiar_contrasena: true
-      });
-    } else {
-      // Usar la contraseña existente
-      contrasenatemporal = estudiante.contrasena;
+    // Verificar que el estado del estudiante no sea 0
+    if (estudiante.estado === 0) {
+      return res.status(403).json({ error: 'No se puede enviar credenciales a un estudiante inactivo' });
     }
 
-    // Enviar credenciales
+    // SIEMPRE generar una nueva contraseña temporal
+    const contrasenatemporal = generarContrasenaTemporalSegura();
+    
+    // Actualizar contraseña del estudiante
+    await estudiante.update({
+      contrasena: contrasenatemporal,
+      debe_cambiar_contrasena: true
+    });
+
+    // Enviar credenciales con la nueva contraseña temporal
     await enviarCredencialesEstudiante(estudiante, contrasenatemporal);
 
     res.status(200).json({ 
@@ -169,7 +165,7 @@ export const enviarCredencialIndividual = async (req, res) => {
       rut: estudiante.rut,
       nombres: estudiante.nombres,
       apellidos: estudiante.apellidos,
-      debe_cambiar_contrasena: estudiante.debe_cambiar_contrasena
+      debe_cambiar_contrasena: true // Siempre será true al generar nueva contraseña
     });
   } catch (error) {
     console.error('Error al enviar credenciales:', error);

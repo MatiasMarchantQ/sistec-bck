@@ -109,7 +109,6 @@ export const crearUsuario = async (req, res) => {
 export const login = async (req, res) => {
   try {
     const { rut, contrasena, rememberMe } = req.body;
-    console.log('Datos de entrada:', { rut, contrasena, rememberMe });
 
     // Validar que se proporcionen RUT y contraseña
     if (!rut || !contrasena) {
@@ -119,32 +118,22 @@ export const login = async (req, res) => {
       });
     }
 
-    let user;
-
-    // Primero, intenta encontrar al estudiante
-    user = await Estudiante.findOne({
-      where: { rut: rut },
+    // Buscar solo en la tabla de Estudiantes
+    const estudiante = await Estudiante.findOne({
+      where: { rut: { [Op.regexp]: `^${rut}$` } },
       include: [{ model: Rol, attributes: ['id', 'nombre'] }]
     });
 
-    // Si no se encuentra, intenta encontrar al usuario (rol_id 1 o 2)
-    if (!user) {
-      user = await Usuario.findOne({
-        where: { rut: { [Op.regexp]: `^${rut}$` } },
-        include: [{ model: Rol, attributes: ['id', 'nombre'] }]
-      });
-    }
-
-    // Verificar si el usuario existe
-    if (!user) {
+    // Verificar si el estudiante existe
+    if (!estudiante) {
       return res.status(404).json({ 
-        error: 'Usuario no encontrado',
+        error: 'Estudiante no encontrado',
         code: 'USER_NOT_FOUND'
       });
     }
 
-    // Verificar estado del usuario
-    if (!user.estado) {
+    // Verificar estado del estudiante
+    if (!estudiante.estado) {
       return res.status(403).json({ 
         error: 'Cuenta desactivada',
         code: 'ACCOUNT_DISABLED'
@@ -152,7 +141,14 @@ export const login = async (req, res) => {
     }
 
     // Validar contraseña
-    let validPassword = await bcrypt.compare(contrasena, user.contrasena);
+    let validPassword;
+    if (estudiante.debe_cambiar_contrasena) {
+      // La contraseña es temporal y se almacena como texto plano
+      validPassword = estudiante.contrasena === contrasena;
+    } else {
+      // La contraseña está hasheada
+      validPassword = await bcrypt.compare(contrasena, estudiante.contrasena);
+    }
 
     if (!validPassword) {
       return res.status(401).json({ 
@@ -161,38 +157,26 @@ export const login = async (req, res) => {
       });
     }
 
-    // Verificar bloqueos o intentos de inicio de sesión (si aplica)
-    if (user.intentos_fallidos >= 3) {
-      return res.status(403).json({ 
-        error: 'Cuenta bloqueada temporalmente',
-        code: 'ACCOUNT_LOCKED',
-        desbloqueado_en: user.bloqueado_hasta
-      });
-    }
-
     // Generar tokens
-    const { accessToken, refreshToken } = generateTokens(user, rememberMe, user instanceof Estudiante ? user.id : null);
+    const { accessToken, refreshToken } = generateTokens(estudiante, rememberMe);
 
-    // Restablecer intentos fallidos
-    await user.update({ 
-      refresh_token: refreshToken,
-      intentos_fallidos: 0,
-      bloqueado_hasta: null
+    // Actualizar el estudiante con el nuevo refresh token
+    await estudiante.update({ 
+      refresh_token: refreshToken
     });
 
     res.json({ 
       accessToken, 
       refreshToken,
       expiresIn: rememberMe ? '7d' : '1h',
-      nombres: user.nombres,
-      debe_cambiar_contrasena: Boolean(user.debe_cambiar_contrasena),
-      usuario_id: user instanceof Estudiante ? null : user.id,
-      estudiante_id: user instanceof Estudiante ? user.id : null,
-      rol_id: user.Rol.id,
-      rol_nombre: user.Rol.nombre
+      nombres: estudiante.nombres,
+      debe_cambiar_contrasena: Boolean(estudiante.debe_cambiar_contrasena),
+      estudiante_id: estudiante.id,
+      rol_id: estudiante.Rol.id,
+      rol_nombre: estudiante.Rol.nombre
     });
   } catch (error) {
-    console.error('Error en login:', error);
+    console.error('Error en login de estudiantes:', error);
     res.status(500).json({ 
       error: 'Error interno del servidor', 
       code: 'SERVER_ERROR',
@@ -238,7 +222,15 @@ export const loginDirectores = async (req, res) => {
     }
 
     // Validar contraseña
-    const validPassword = await bcrypt.compare(contrasena, user.contrasena);
+    let validPassword;
+    if (user.debe_cambiar_contrasena) {
+      // La contraseña es temporal y se almacena como texto plano
+      validPassword = user.contrasena === contrasena;
+    } else {
+      // La contraseña está hasheada
+      validPassword = await bcrypt.compare(contrasena, user.contrasena);
+    }
+
     if (!validPassword) {
       return res.status(401).json({ 
         error: 'Contraseña incorrecta',
@@ -282,8 +274,8 @@ const generateTokens = (user, rememberMe = false, estudianteId = null) => {
       id: user.id,
       rol_id: user.Rol.id,
       rol_nombre: user.Rol.nombre,
-      estudiante_id: estudianteId,
-      is_estudiante: estudianteId !== null
+      estudiante_id: user.Rol.id === 3 ? user.id : estudianteId,  // Cambio clave
+      is_estudiante: user.Rol.id === 3 || estudianteId !== null
     },
     process.env.JWT_ACCESS_SECRET,
     { expiresIn: rememberMe ? '7d' : '1h' }
@@ -293,7 +285,8 @@ const generateTokens = (user, rememberMe = false, estudianteId = null) => {
     { 
       id: user.id,
       rol_id: user.Rol.id,
-      is_estudiante: estudianteId !== null
+      estudiante_id: user.Rol.id === 3 ? user.id : estudianteId,  // Añadir esto
+      is_estudiante: user.Rol.id === 3 || estudianteId !== null
     },
     process.env.JWT_REFRESH_SECRET,
     { expiresIn: rememberMe ? '60d' : '30d' }
@@ -348,7 +341,7 @@ export const logout = async (req, res) => {
   
     const { id, rol_id } = req.user;
   
-    if (rol_id === ROLES.ESTUDIANTE) { // Asumiendo que 3 es el rol_id para estudiante
+    if (rol_id === ROLES.ESTUDIANTE) {
       const estudiante = await Estudiante.findByPk(id);
       if (!estudiante) {
         return res.status(404).json({
@@ -390,53 +383,78 @@ export const logout = async (req, res) => {
 export const cambiarContrasena = async (req, res) => {
   try {
     const { contrasenaActual, nuevaContrasena } = req.body;
-    const userId = req.user.id;
-    const userRolId = req.user.rol_id;
-    const debeCambiarContrasena = Boolean(req.user.debe_cambiar_contrasena);
+    const userId = req.user.id; // ID del usuario desde el token
+    const userRolId = req.user.rol_id; // Rol del usuario
+    const debeCambiarContrasena = Boolean(req.user.debe_cambiar_contrasena); // Estado de cambio de contraseña
 
+    console.log('Rol del usuario:', userRolId);
     let usuario;
-    if (userRolId === ROLES.ESTUDIANTE) {
+
+    // Si el rol es 3, buscamos en Estudiante
+    if (userRolId === 3) {
+      // Buscar en Estudiante usando el userId
       usuario = await Estudiante.findByPk(userId);
-    } else {
-      usuario = await Usuario.findByPk(userId);
-    }
-
-    if (!usuario) {
-      return res.status(404).json({ error: 'Usuario no encontrado' });
-    }
-
-    // Si no debe cambiar la contraseña, validamos la contraseña actual
-    if (!debeCambiarContrasena) {
-      const validPassword = await bcrypt.compare(contrasenaActual, usuario.contrasena);
-      if (!validPassword) {
-        return res.status(401).json({ error: 'Contraseña actual incorrecta' });
+      
+      // Verificar si el estudiante existe
+      if (!usuario) {
+        return res.status(404).json({ error: 'Estudiante no encontrado' });
       }
-    }
 
-    // Generar nueva contraseña hasheada
-    const salt = await bcrypt.genSalt(10);
-    const nuevaContrasenaHash = await bcrypt.hash(nuevaContrasena, salt);
+      // Validar la contraseña actual solo si no debe cambiarla
+      if (!debeCambiarContrasena) {
+        const validPassword = await bcrypt.compare(contrasenaActual, usuario.contrasena);
+        if (!validPassword) {
+          return res.status(401).json({ error: 'Contraseña actual incorrecta' });
+        }
+      }
 
-    // Actualizar usando el modelo
-    if (userRolId === ROLES.ESTUDIANTE) {
-      await usuario.update({
-        contrasena: nuevaContrasenaHash,
+      // Generar nueva contraseña hasheada
+      const salt = await bcrypt.genSalt(10);
+      const nuevaContrasenaHash = await bcrypt.hash(nuevaContrasena, salt);
+
+      // Actualizar la contraseña y el estado de debe_cambiar_contrasena en Estudiante
+      await Estudiante.update(
+        { contrasena: nuevaContrasenaHash, debe_cambiar_contrasena: false },
+        { where: { id: userId } }
+      );
+
+      return res.json({ 
+        message: 'Contraseña del estudiante actualizada exitosamente',
         debe_cambiar_contrasena: false
       });
+
     } else {
-      await usuario.update({
-        contrasena: nuevaContrasenaHash,
+      // Para otros roles, buscar en Usuario
+      usuario = await Usuario.findByPk(userId);
+      
+      // Verificar si el usuario existe
+      if (!usuario) {
+        return res.status(404).json({ error: 'Usuario no encontrado' });
+      }
+
+      // Validar la contraseña actual solo si no debe cambiarla
+      if (!debeCambiarContrasena) {
+        const validPassword = await bcrypt.compare(contrasenaActual, usuario.contrasena);
+        if (!validPassword) {
+          return res.status(401).json({ error: 'Contraseña actual incorrecta' });
+        }
+      }
+
+      // Generar nueva contraseña hasheada
+      const salt = await bcrypt.genSalt(10);
+      const nuevaContrasenaHash = await bcrypt.hash(nuevaContrasena, salt);
+
+      // Actualizar la contraseña y el estado de debe_cambiar_contrasena en Usuario
+      await Usuario.update(
+        { contrasena: nuevaContrasenaHash, debe_cambiar_contrasena: false },
+        { where: { id: userId } }
+      );
+
+      return res.json({ 
+        message: 'Contraseña del usuario actualizada exitosamente',
         debe_cambiar_contrasena: false
       });
     }
-
-    // Recargar el usuario para verificar los cambios
-    await usuario.reload();
-
-    res.json({ 
-      message: 'Contraseña actualizada exitosamente',
-      debe_cambiar_contrasena: false
-    });
 
   } catch (error) {
     console.error('Error detallado al cambiar la contraseña:', error);

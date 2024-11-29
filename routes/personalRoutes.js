@@ -6,7 +6,9 @@ import {
   crearPersonal,
   actualizarPersonal,
   eliminarPersonal,
-  obtenerPersonalPorId
+  obtenerPersonalPorId,
+  enviarCredencialIndividual,
+  cambiarContrasenaUsuario
 } from '../controllers/personalController.js';
 
 const router = express.Router();
@@ -16,5 +18,8 @@ router.post('/', verifyToken, crearPersonal);
 router.put('/:id', verifyToken, actualizarPersonal);
 router.delete('/:id', verifyToken, eliminarPersonal);
 router.get('/:id', verifyToken, obtenerPersonalPorId);
+
+router.post('/:id/enviar-credencial', enviarCredencialIndividual);
+router.put('/:id/cambiar-contrasena', cambiarContrasenaUsuario);
 
 export default router;

@@ -54,6 +54,18 @@ const FichaClinicaInfantil = sequelize.define('FichaClinicaInfantil', {
   institucion_id: {
     type: DataTypes.INTEGER,
     allowNull: false
+  },
+  is_reevaluacion: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
+  },
+  ficha_original_id: {
+    type: DataTypes.INTEGER,
+    references: {
+        model: 'fichas_clinicas_infantiles', // Usa el nombre de la tabla en lugar del modelo
+        key: 'id'
+    },
+    allowNull: true
   }
 }, {
   tableName: 'fichas_clinicas_infantiles',
@@ -64,5 +76,6 @@ FichaClinicaInfantil.belongsTo(PacienteInfantil, { foreignKey: 'paciente_id' });
 FichaClinicaInfantil.belongsTo(Usuario, { foreignKey: 'usuario_id', as: 'usuario' });
 FichaClinicaInfantil.belongsTo(Estudiante, { foreignKey: 'estudiante_id', as: 'estudiante' });
 FichaClinicaInfantil.belongsTo(Institucion, { foreignKey: 'institucion_id', as: 'institucion' });
+
 
 export default FichaClinicaInfantil;
