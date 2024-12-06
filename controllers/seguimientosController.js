@@ -210,7 +210,9 @@ export const crearSeguimientoAdulto = async (req, res) => {
       autoeficacia,
       otrosSintomas,
       manejoSintomas,
-      comentarios,
+      comentario_primer_llamado,
+      comentario_segundo_llamado,
+      comentario_tercer_llamado,
       estudiante_id,
       usuario_id
     } = req.body;
@@ -243,7 +245,9 @@ export const crearSeguimientoAdulto = async (req, res) => {
       autoeficacia: autoeficacia || {},
       otros_sintomas: otrosSintomas || '',
       manejo_sintomas: manejoSintomas || '',
-      comentarios: comentarios || '',
+      comentario_primer_llamado: comentario_primer_llamado || '',
+      comentario_segundo_llamado: comentario_segundo_llamado || '',
+      comentario_tercer_llamado: comentario_tercer_llamado || '',
       estudiante_id: estudiante_id || null,
       usuario_id: usuario_id || null
     };
@@ -375,5 +379,215 @@ export const obtenerSeguimientoAdultoPorId = async (req, res) => {
           detalle: error.message,
           stack: error.stack
       });
+  }
+};
+export const actualizarSeguimientoAdulto = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { 
+      pacienteId, 
+      fichaId, 
+      comentario_primer_llamado,
+      comentario_segundo_llamado,
+      comentario_tercer_llamado,
+      ...datosActualizacion 
+    } = req.body;
+
+    console.log('Datos recibidos para actualización:', JSON.stringify(req.body, null, 2));
+
+    const seguimientoExistente = await SeguimientoAdulto.findByPk(id);
+
+    if (!seguimientoExistente) {
+      return res.status(404).json({ message: 'Seguimiento no encontrado' });
+    }
+
+    // Función de serialización segura y mejorada
+    const serializar = (datos) => {
+      if (datos === null || datos === undefined) {
+        return '{}';
+      }
+    
+      try {
+        // Si ya es un string, devolverlo directamente
+        if (typeof datos === 'string') {
+          return datos;
+        }
+
+        // Si es un objeto, convertirlo a string
+        const jsonString = JSON.stringify(datos, (key, value) => {
+          if (value === undefined) return null;
+          return value;
+        });
+    
+        return jsonString.replace(/\\/g, '');
+      } catch (error) {
+        console.error('Error en serialización:', error);
+        return '{}';
+      }
+    };
+
+    // Inicializar datosParaActualizar después de la verificación de seguimiento existente
+    const datosParaActualizar = {};
+
+    // Mapeo de nombres de campos
+    const mapeoNombres = {
+      riesgoInfeccion: 'riesgo_infeccion',
+      riesgoGlicemia: 'riesgo_glicemia',
+      riesgoHipertension: 'riesgo_hipertension',
+      adherencia: 'adherencia',
+      adherenciaTratamiento: 'adherencia_tratamiento',
+      efectosSecundarios: 'efectos_secundarios',
+      nutricion: 'nutricion',
+      actividadFisica: 'actividad_fisica',
+      eliminacion: 'eliminacion',
+      sintomasDepresivos: 'sintomas_depresivos',
+      autoeficacia: 'autoeficacia'
+    };
+
+    // Iterar sobre los campos serializables
+    Object.keys(mapeoNombres).forEach(campoCliente => {
+      const campoDB = mapeoNombres[campoCliente];
+      
+      if (datosActualizacion[campoCliente] !== undefined) {
+        datosParaActualizar[campoDB] = serializar(datosActualizacion[campoCliente]);
+      }
+    });
+
+    // Manejo especial para comentarios
+    if (datosActualizacion.comentarios !== undefined) {
+      // Si es un objeto, convertirlo a string JSON
+      if (typeof datosActualizacion.comentarios === 'object') {
+        datosParaActualizar.comentarios = JSON.stringify(datosActualizacion.comentarios);
+      } else {
+        // Si ya es un string, usarlo directamente
+        datosParaActualizar.comentarios = datosActualizacion.comentarios;
+      }
+    }
+
+    // Campos de texto plano
+    const mapeoTexto = {
+      otrosSintomas: 'otros_sintomas',
+      manejoSintomas: 'manejo_sintomas'
+    };
+
+    // Iterar sobre campos de texto
+    Object.keys(mapeoTexto).forEach(campoCliente => {
+      const campoDB = mapeoTexto[campoCliente];
+      
+      if (datosActualizacion[campoCliente] !== undefined) {
+        datosParaActualizar[campoDB] = datosActualizacion[campoCliente];
+      }
+    });
+
+    // Campos booleanos o especiales
+    if (datosActualizacion.esLlamadoFinal !== undefined) {
+      datosParaActualizar.es_llamado_final = datosActualizacion.esLlamadoFinal;
+    }
+
+    // Campos de fecha
+    if (datosActualizacion.fecha) {
+      datosParaActualizar.fecha = datosActualizacion.fecha;
+    }
+
+    // Añadir campos de comentarios específicos
+    if (comentario_primer_llamado !== undefined) {
+      datosParaActualizar.comentario_primer_llamado = comentario_primer_llamado;
+    }
+    
+    if (comentario_segundo_llamado !== undefined) {
+      datosParaActualizar.comentario_segundo_llamado = comentario_segundo_llamado;
+    }
+    
+    if (comentario_tercer_llamado !== undefined) {
+      datosParaActualizar.comentario_tercer_llamado = comentario_tercer_llamado;
+    }
+
+    // Verificar si hay datos para actualizar
+    if (Object.keys(datosParaActualizar).length === 0) {
+      return res.status(400).json({ 
+        message: 'No se proporcionaron datos para actualizar' 
+      });
+    }
+
+    // Actualizar el seguimiento
+    await seguimientoExistente.update(datosParaActualizar);
+
+    // Recuperar el seguimiento actualizado
+    const seguimientoActualizado = await SeguimientoAdulto.findByPk(id);
+
+    return res.status(200).json({
+      message: 'Seguimiento actualizado correctamente', 
+      data: seguimientoActualizado
+    });
+
+  } catch (error) {
+    console.error('Error detallado al actualizar seguimiento:', error);
+    return res.status(500).json({ 
+      message: 'Error al actualizar el seguimiento',
+      error: error.message,
+      detalleError: error.stack
+    });
+  }
+};
+
+export const actualizarSeguimientoInfantil = async (req, res) => {
+  try {
+    const { id } = req.params; // ID del seguimiento a actualizar
+    const { 
+      pacienteId, 
+      fecha,
+      grupoEdad,
+      areaDPM,
+      usuario_id,
+      estudiante_id
+    } = req.body;
+
+    // Buscar el seguimiento infantil existente
+    const seguimientoExistente = await SeguimientoInfantil.findByPk(id);
+
+    if (!seguimientoExistente) {
+      return res.status(404).json({ message: 'Seguimiento infantil no encontrado' });
+    }
+
+    // Preparar los datos para actualizar
+    const datosParaActualizar = {
+      paciente_id: pacienteId,
+      fecha: fecha || seguimientoExistente.fecha, // Mantener la fecha existente si no se proporciona una nueva
+      grupo_edad: grupoEdad || seguimientoExistente.grupo_edad, // Mantener el grupo de edad existente si no se proporciona uno nuevo,
+      area_motor_grueso: areaDPM.motorGrueso ? 1 : 0,
+      area_motor_fino: areaDPM.motorFino ? 1 : 0,
+      area_comunicacion: areaDPM.comunicacion ? 1 : 0,
+      area_cognoscitivo: areaDPM.cognoscitivo ? 1 : 0,
+      area_socioemocional: areaDPM.socioemocional ? 1 : 0,
+      usuario_id: usuario_id || seguimientoExistente.usuario_id, // Mantener el usuario existente si no se proporciona uno nuevo
+      estudiante_id: estudiante_id || seguimientoExistente.estudiante_id // Mantener el estudiante existente si no se proporciona uno nuevo
+    };
+
+    // Actualizar el seguimiento
+    await seguimientoExistente.update(datosParaActualizar);
+
+    // Recuperar el seguimiento actualizado
+    const seguimientoActualizado = await SeguimientoInfantil.findByPk(id, {
+      include: [
+        {
+          model: PacienteInfantil,
+          as: 'paciente_infantil',
+          attributes: ['nombres', 'apellidos', 'fecha_nacimiento']
+        }
+      ]
+    });
+
+    return res.status(200).json({
+      message: 'Seguimiento infantil actualizado correctamente', 
+      data: seguimientoActualizado
+    });
+
+  } catch (error) {
+    console.error('Error al actualizar seguimiento infantil:', error);
+    return res.status(500).json({ 
+      message: 'Error al actualizar el seguimiento infantil',
+      error: error.message,
+      detalleError: error.stack
+    });
   }
 };

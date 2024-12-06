@@ -16,7 +16,6 @@ export const verifyToken = async (req, res, next) => {
     let decoded;
     try {
       decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
-      console.log('Token decodificado completo:', decoded);
     } catch (jwtError) {
       console.error('Error de verificación de token:', jwtError);
       return res.status(401).json({ error: 'Token inválido', details: jwtError.message });
@@ -29,22 +28,12 @@ export const verifyToken = async (req, res, next) => {
         user = await Estudiante.findByPk(decoded.id, {
           attributes: ['id', 'refresh_token', 'rol_id', 'debe_cambiar_contrasena']
         });
-        
-        console.log('Búsqueda en Estudiante:', {
-          id: decoded.id,
-          encontrado: !!user
-        });
       }
 
       // Si no se encuentra en Estudiante o no es rol 3, buscar en Usuario
       if (!user) {
         user = await Usuario.findByPk(decoded.id, {
           attributes: ['id', 'refresh_token', 'rol_id', 'debe_cambiar_contrasena']
-        });
-        
-        console.log('Búsqueda en Usuario:', {
-          id: decoded.id,
-          encontrado: !!user
         });
       }
 
@@ -77,8 +66,6 @@ export const verifyToken = async (req, res, next) => {
         ...decoded
       };
 
-      console.log('Usuario autenticado:', req.user);
-      
       next();
     } catch (dbError) {
       console.error('Error en búsqueda de usuario:', dbError);

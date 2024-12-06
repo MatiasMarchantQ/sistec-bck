@@ -162,6 +162,16 @@ export function setupAssociations() {
     }
   });
 
+  FichaClinicaAdulto.hasMany(FichaTipoFamilia, {
+    foreignKey: 'ficha_clinica_id',
+    as: 'fichaTipoFamilia'
+});
+
+FichaTipoFamilia.belongsTo(TipoFamilia, {
+    foreignKey: 'tipo_familia_id',
+    as: 'tipoFamiliaAdulto'
+});
+
 // Para FichaClinicaInfantil (similar)
 FichaClinicaInfantil.hasMany(FichaClinicaInfantil, {
     foreignKey: 'paciente_id',

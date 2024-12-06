@@ -161,13 +161,6 @@ export const obtenerInstitucionesConAsignaciones = async (req, res) => {
 export const crearAsignacion = async (req, res) => {
   try {
     const { estudiante_id, institucion_id, receptor_id, fecha_inicio, fecha_fin } = req.body;
-
-    console.log("Verificando asignaciones existentes para:", {
-      institucion_id,
-      receptor_id,
-      fecha_inicio,
-      fecha_fin
-    });
     // Verificar si el estudiante y la institución existen
     const estudiante = await Estudiante.findByPk(estudiante_id);
     const institucion = await Institucion.findByPk(institucion_id);
@@ -198,9 +191,6 @@ export const crearAsignacion = async (req, res) => {
     if (asignacionesExistentes.length > 0) {
       return res.status(400).json({ error: 'Ya hay asignaciones para este receptor en este periodo.' });
     }
-
-    console.log("Asignaciones existentes encontradas:", asignacionesExistentes);
-
     // Crear nueva asignación
     const nuevaAsignacion = await Asignacion.create({
       estudiante_id,

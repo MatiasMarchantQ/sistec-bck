@@ -85,9 +85,20 @@ SeguimientoAdulto.init({
     type: DataTypes.TEXT,
     allowNull: true
   },
-  comentarios: {
+  comentario_primer_llamado: {
     type: DataTypes.TEXT,
-    allowNull: true
+    allowNull: true,
+    field: 'comentario_primer_llamado'
+  },
+  comentario_segundo_llamado: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    field: 'comentario_segundo_llamado'
+  },
+  comentario_tercer_llamado: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    field: 'comentario_tercer_llamado'
   },
   estudiante_id: {
     type: DataTypes.INTEGER,
