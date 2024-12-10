@@ -44,6 +44,14 @@ Asignacion.init ({
   estado: {
     type: DataTypes.BOOLEAN,
     defaultValue: true
+  },
+  es_asignacion_excepcional: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
+  },
+  justificacion_excepcional: {
+    type: DataTypes.TEXT,
+    allowNull: true
   }
 }, {
   sequelize,

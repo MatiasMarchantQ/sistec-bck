@@ -27,8 +27,28 @@ export const enviarCredencialIndividual = async (req, res) => {
       return res.status(404).json({ error: 'Usuario no encontrado' });
     }
 
-    // Generar SIEMPRE una nueva contraseña temporal
-    const contrasenatemporal = generarContrasenaTemporalSegura();
+    // Verificar si la contraseña actual es un texto plano (no hasheada)
+    let contrasenatemporal;
+    
+    // Función para verificar si una cadena está hasheada (ejemplo básico)
+    const esContrasenaHasheada = (contrasena) => {
+      // Criterios para identificar una contraseña hasheada
+      return (
+        contrasena && 
+        (contrasena.startsWith('$2b$') || // Bcrypt
+         contrasena.startsWith('$2a$') || // Bcrypt
+         contrasena.length > 60) // Longitud típica de hash
+    )};
+
+    // Si la contraseña actual no está hasheada, usarla
+    if (usuario.contrasena && 
+        typeof usuario.contrasena === 'string' && 
+        !esContrasenaHasheada(usuario.contrasena)) {
+      contrasenatemporal = usuario.contrasena;
+    } else {
+      // Si la contraseña está hasheada o no es válida, generar una nueva
+      contrasenatemporal = generarContrasenaTemporalSegura();
+    }
 
     // Actualizar la contraseña en la base de datos
     await usuario.update({
@@ -36,7 +56,7 @@ export const enviarCredencialIndividual = async (req, res) => {
       debe_cambiar_contrasena: true
     });
 
-    // Enviar credenciales con la nueva contraseña temporal
+    // Enviar credenciales con la contraseña
     await enviarCredencialesUsuario(usuario, contrasenatemporal);
 
     res.status(200).json({
@@ -44,7 +64,7 @@ export const enviarCredencialIndividual = async (req, res) => {
       correo: usuario.correo,
       nombres: usuario.nombres,
       apellidos: usuario.apellidos,
-      debe_cambiar_contrasena: true // Siempre será true al generar nueva contraseña
+      debe_cambiar_contrasena: true
     });
   } catch (error) {
     console.error('Error al enviar credenciales:', error);
@@ -137,6 +157,7 @@ export const obtenerPersonal = async (req, res) => {
 };
 
 // Crear nuevo personal
+// Crear nuevo personal
 export const crearPersonal = async (req, res) => {
   try {
     const {
@@ -165,16 +186,14 @@ export const crearPersonal = async (req, res) => {
       return res.status(400).json({ error: 'El correo ya está registrado' });
     }
 
-    // Encriptar contraseña
-    const hashedPassword = await bcrypt.hash(contrasena, 10);
-
+    // NO hashear la contraseña, guardarla como texto
     const nuevoUsuario = await Usuario.create({
       rut,
       nombres,
       apellidos,
       correo,
       rol_id,
-      contrasena: hashedPassword,
+      contrasena: contrasena, // Guardar la contraseña como texto
       debe_cambiar_contrasena: true,
       estado: true
     });

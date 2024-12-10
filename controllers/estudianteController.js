@@ -214,7 +214,6 @@ export const cargarEstudiantes = async (req, res) => {
               apellidos: estudiante.apellidos,
               correo: estudiante.correo,
               anos_cursados: anosActuales.join(','),
-              semestre: estudiante.semestre,
               contador_registros: estudianteExistente.contador_registros + 1
             });
             estudiantesActualizados++;
@@ -226,8 +225,7 @@ export const cargarEstudiantes = async (req, res) => {
             await estudianteExistente.update({
               nombres: estudiante.nombres,
               apellidos: estudiante.apellidos,
-              correo: estudiante.correo,
-              semestre: estudiante.semestre
+              correo: estudiante.correo
             });
             resultados.push({
               rut: estudiante.rut,
@@ -249,7 +247,6 @@ export const cargarEstudiantes = async (req, res) => {
             estado: true,
             contador_registros: 1,
             anos_cursados: estudiante.anos_cursados,
-            semestre: estudiante.semestre,
             rol_id: 3
           });
           nuevosEstudiantes++;
@@ -257,8 +254,6 @@ export const cargarEstudiantes = async (req, res) => {
             rut: estudiante.rut,
             mensaje: `Estudiante creado exitosamente con ID: ${ultimoId}`
           });
-          // Enviar credenciales por correo
-          await enviarCredencialesEstudiante(nuevoEstudiante, estudiante.contrasena);
         }
       } catch (error) {
         console.error('Error al procesar estudiante:', error);
@@ -356,7 +351,7 @@ export const actualizarEstudiantesMasivo = async (req, res) => {
 
 export const obtenerEstudiantes = async (req, res) => {
   try {
-    const { page = 1, limit = 10, search = '', ano = '', semestre = '', estado } = req.query;
+    const { page = 1, limit = 10, search = '', ano = '', estado } = req.query;
     const offset = (page - 1) * limit;
 
     let whereClause = {};
@@ -380,10 +375,6 @@ export const obtenerEstudiantes = async (req, res) => {
       whereClause.anos_cursados = {
         [Op.like]: `%${ano}%`
       };
-    }
-
-    if (semestre) {
-      whereClause.semestre = semestre;
     }
 
     const { count, rows } = await Estudiante.findAndCountAll({
@@ -413,11 +404,11 @@ export const obtenerEstudiantes = async (req, res) => {
   }
 };
 
-  export const crearEstudiante = async (req, res) => {
-    try {
-      const { nombres, apellidos, rut, correo, contrasena, anos_cursados, semestre } = req.body;
-  
-      // Verificar si el RUT ya existe
+export const crearEstudiante = async (req, res) => {
+  try {
+    const { nombres, apellidos, rut, correo, contrasena, anos_cursados } = req.body;
+
+    // Verificar si el RUT ya existe
     const estudianteExistente = await Estudiante.findOne({ 
       where: { rut } 
     });
@@ -444,50 +435,48 @@ export const obtenerEstudiantes = async (req, res) => {
           : 'Registrado como usuario'
       });
     }
-  
-      // Obtener el último estudiante para determinar el siguiente ID
-      const ultimoEstudiante = await Estudiante.findOne({
-        order: [['id', 'DESC']]
-      });
-      
-      const siguienteId = ultimoEstudiante ? ultimoEstudiante.id + 1 : 1;
-  
-      const nuevoEstudiante = await Estudiante.create({
-        id: siguienteId,
-        nombres,
-        apellidos,
-        rut,
-        correo,
-        contrasena,
-        debe_cambiar_contrasena: true,
-        estado: true,
-        contador_registros: 1,
-        anos_cursados,
-        semestre,
-        rol_id: 3
-      });
-  
-      res.status(201).json({
-        mensaje: 'Estudiante creado exitosamente',
-        estudiante: {
-          id: nuevoEstudiante.id,
-          nombres: nuevoEstudiante.nombres,
-          apellidos: nuevoEstudiante.apellidos,
-          rut: nuevoEstudiante.rut,
-          correo: nuevoEstudiante.correo,
-          anos_cursados: nuevoEstudiante.anos_cursados,
-          semestre: nuevoEstudiante.semestre
-        }
-      });
-  
-    } catch (error) {
-      console.error('Error al crear estudiante:', error);
-      res.status(500).json({
-        error: 'Error al crear estudiante',
-        detalles: error.message
-      });
-    }
-  };
+
+    // Obtener el último estudiante para determinar el siguiente ID
+    const ultimoEstudiante = await Estudiante.findOne({
+      order: [['id', 'DESC']]
+    });
+    
+    const siguienteId = ultimoEstudiante ? ultimoEstudiante.id + 1 : 1;
+
+    const nuevoEstudiante = await Estudiante.create({
+      id: siguienteId,
+      nombres,
+      apellidos,
+      rut,
+      correo,
+      contrasena,
+      debe_cambiar_contrasena: true,
+      estado: true,
+      contador_registros:  1,
+      anos_cursados,
+      rol_id: 3
+    });
+
+    res.status(201).json({
+      mensaje: 'Estudiante creado exitosamente',
+      estudiante: {
+        id: nuevoEstudiante.id,
+        nombres: nuevoEstudiante.nombres,
+        apellidos: nuevoEstudiante.apellidos,
+        rut: nuevoEstudiante.rut,
+        correo: nuevoEstudiante.correo,
+        anos_cursados: nuevoEstudiante.anos_cursados
+      }
+    });
+
+  } catch (error) {
+    console.error('Error al crear estudiante:', error);
+    res.status(500).json({
+      error: 'Error al crear estudiante',
+      detalles: error.message
+    });
+  }
+};
 
   export const getMe = async (req, res) => {
     try {
@@ -509,38 +498,38 @@ export const obtenerEstudiantes = async (req, res) => {
     }
   };
   
-export const actualizarEstudiante = async (req, res) => {
+  export const actualizarEstudiante = async (req, res) => {
     try {
       const { id } = req.params;
-      const { nombres, apellidos, correo, anos_cursados, semestre, estado } = req.body;
+      const { nombres, apellidos, correo, anos_cursados, estado } = req.body;
   
       const estudiante = await Estudiante.findByPk(id);
       if (!estudiante) {
         return res.status(404).json({ error: 'Estudiante no encontrado' });
       }
-
+  
       // Si se intenta cambiar el correo, verificar que no exista en otras tablas
-    if (correo && correo !== estudiante.correo) {
-      const correoExistenteEstudiante = await Estudiante.findOne({ 
-        where: { 
-          correo, 
-          id: { [Op.ne]: id } // Excluir el estudiante actual
-        } 
-      });
-      
-      const correoExistenteUsuario = await Usuario.findOne({ 
-        where: { correo } 
-      });
-
-      if (correoExistenteEstudiante || correoExistenteUsuario) {
-        return res.status(400).json({ 
-          error: 'El correo electrónico ya está registrado en el sistema',
-          detalles: correoExistenteEstudiante 
-            ? 'Registrado como estudiante' 
-            : 'Registrado como usuario'
+      if (correo && correo !== estudiante.correo) {
+        const correoExistenteEstudiante = await Estudiante.findOne({ 
+          where: { 
+            correo, 
+            id: { [Op.ne]: id } // Excluir el estudiante actual
+          } 
         });
+        
+        const correoExistenteUsuario = await Usuario.findOne({ 
+          where: { correo } 
+        });
+  
+        if (correoExistenteEstudiante || correoExistenteUsuario) {
+          return res.status(400).json({ 
+            error: 'El correo electrónico ya está registrado en el sistema',
+            detalles: correoExistenteEstudiante 
+              ? 'Registrado como estudiante' 
+              : 'Registrado como usuario'
+          });
+        }
       }
-    }
   
       // Crear un objeto con los campos a actualizar
       const camposActualizar = {};
@@ -550,7 +539,6 @@ export const actualizarEstudiante = async (req, res) => {
       if (apellidos !== undefined) camposActualizar.apellidos = apellidos;
       if (correo !== undefined) camposActualizar.correo = correo;
       if (anos_cursados !== undefined) camposActualizar.anos_cursados = anos_cursados;
-      if (semestre !== undefined) camposActualizar.semestre = semestre;
       if (estado !== undefined) camposActualizar.estado = estado;
   
       await estudiante.update(camposActualizar);
@@ -564,7 +552,6 @@ export const actualizarEstudiante = async (req, res) => {
           rut: estudiante.rut,
           correo: estudiante.correo,
           anos_cursados: estudiante.anos_cursados,
-          semestre: estudiante.semestre,
           estado: estudiante.estado
         }
       });

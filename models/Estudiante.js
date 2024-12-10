@@ -48,10 +48,6 @@ Estudiante.init({
   anos_cursados: {
     type: DataTypes.STRING
   },
-  semestre: {
-    type: DataTypes.INTEGER,
-    allowNull: false
-  },
   rol_id: {
     type: DataTypes.INTEGER,
     allowNull: false,

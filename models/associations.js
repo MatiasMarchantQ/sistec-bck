@@ -182,4 +182,21 @@ FichaClinicaInfantil.hasMany(FichaClinicaInfantil, {
   });  
 
   FichaClinicaAdulto.belongsTo(PacienteAdulto, { foreignKey: 'paciente_id' });
+
+  // Definir asociaciones
+Institucion.hasMany(FichaClinicaAdulto, { 
+  foreignKey: 'institucion_id', 
+  as: 'fichasAdultos' 
+});
+
+Institucion.hasMany(FichaClinicaInfantil, { 
+  foreignKey: 'institucion_id', 
+  as: 'fichasInfantiles' 
+});
+
+Institucion.belongsTo(TipoInstitucion, {
+  foreignKey: 'tipo_id',
+  as: 'tipoInstitucion'
+});
+
 }

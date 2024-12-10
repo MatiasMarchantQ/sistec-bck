@@ -10,7 +10,8 @@ import {
     getFichaClinicaInfantil, 
     updateFichaClinicaInfantil, // Actualización de ficha clínica infantil
     getReevaluaciones, 
-    updateReevaluacion // Actualización de reevaluación
+    updateReevaluacion, // Actualización de reevaluación
+    updateReevaluacionInfantil
 } from '../controllers/fichaClinicaController.js';
 
 const router = Router();
@@ -32,6 +33,7 @@ router.put('/infantil/:id', verifyToken, updateFichaClinicaInfantil); // Ruta pa
 
 // Rutas para reevaluaciones
 router.get('/reevaluaciones/:id', verifyToken, getReevaluaciones);
-router.put('/reevaluaciones/:id', verifyToken, updateReevaluacion); // Ruta para actualizar reevaluación
+router.put('/reevaluaciones/:id', verifyToken, updateReevaluacion);
+router.put('/reevaluaciones-infantil/:id', updateReevaluacionInfantil);
 
 export default router;

@@ -1,4 +1,3 @@
-// src/models/Institucion.js
 import { Model, DataTypes } from 'sequelize';
 import sequelize from './index.js';
 

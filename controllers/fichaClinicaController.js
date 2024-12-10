@@ -1341,7 +1341,7 @@ export const getReevaluaciones = async (req, res) => {
                 include: [
                     {
                         model: PacienteInfantil,
-                        attributes: ['id', 'nombres', 'apellidos', 'rut', 'edad', 'telefono_principal', 'telefono_secundario']
+                        attributes: ['id', 'nombres', 'apellidos', 'rut', 'edad', 'telefono_principal', 'telefono_secundario','fecha_nacimiento']
                     },
                     {
                         model: FichaTipoFamilia,
@@ -1517,6 +1517,7 @@ function formatearReevaluacionInfantil(reevaluacion) {
             nombres: reevaluacion.PacienteInfantil.nombres,
             apellidos: reevaluacion.PacienteInfantil.apellidos,
             rut: reevaluacion.PacienteInfantil.rut,
+            fechaNacimiento: reevaluacion.PacienteInfantil.fecha_nacimiento,
             edad: reevaluacion.PacienteInfantil.edad,
             telefonoPrincipal: reevaluacion.PacienteInfantil.telefono_principal,
             telefonoSecundario: reevaluacion.PacienteInfantil.telefono_secundario
@@ -1941,61 +1942,412 @@ function formatearReevaluacionInfantil(reevaluacion) {
     export const updateReevaluacion = async (req, res) => {
         const t = await sequelize.transaction();
         try {
-            const { id } = req.params; // ID de la reevaluación a actualizar
+            const { id } = req.params;
             const {
+                tipo,
+                nombres,
+                apellidos,
+                rut,
+                edad,
+                diagnostico_id,
+                diagnostico_otro,
+                escolaridad,
+                ocupacion,
+                direccion,
+                conQuienVive,
+                tiposFamilia,
+                tipoFamiliaOtro,
+                ciclo_vital_familiar_id,
+                telefonoPrincipal,
+                telefonoSecundario,
+                horarioLlamada,
+                conectividad,
+                valorHbac1,
+                factoresRiesgo,
                 puntajeDPM,
                 diagnosticoDSM,
-                conQuienVive,
                 localidad,
                 factoresRiesgoNino,
-                factoresRiesgoFamiliares
+                factoresRiesgoFamiliares,
+                otrosFactoresRiesgoFamiliares
             } = req.body;
-
-            // Buscar la reevaluación
-            const reevaluacion = await FichaClinicaInfantil.findByPk(id, { transaction: t });
-            if (!reevaluacion) {
-                return res.status(404).json({ success: false, message: 'Reevaluación no encontrada' });
+    
+            // Validar el tipo de reevaluación
+            if (!tipo || (tipo !== 'adulto' && tipo !== 'infantil')) {
+                return res.status(400).json({ 
+                    success: false, 
+                    message: 'Tipo de reevaluación inválido' 
+                });
             }
+    
+            // Seleccionar el modelo correcto según el tipo
+            const ModeloFicha = tipo === 'adulto' 
+                ? FichaClinicaAdulto 
+                : FichaClinicaInfantil;
+    
+            // Buscar la reevaluación
+            const reevaluacion = await ModeloFicha.findByPk(id, { 
+                include: [
+                    tipo === 'adulto' 
+                        ? { model: PacienteAdulto, as: 'PacienteAdulto' }
+                        : { model: PacienteInfantil, as: 'PacienteInfantil' }
+                ],
+                transaction: t 
+            });
+    
+            if (!reevaluacion) {
+                await t.rollback();
+                return res.status(404).json({ 
+                    success: false, 
+                    message: 'Reevaluación no encontrada' 
+                });
+            }
+    
+            // Datos comunes para actualización
+            const datosComunes = {
+                con_quien_vive: conQuienVive,
+                ciclo_vital_familiar_id
+            };
+    
+            // Preparar datos específicos para cada tipo de ficha
+            const datosEspecificos = tipo === 'adulto' 
+                ? {
+                    // Si hay diagnostico_otro, establecer diagnostico_id como null
+                    diagnostico_id: diagnostico_otro ? null : (diagnostico_id || null),
+                    diagnostico_otro: diagnostico_otro || null,
+                    escolaridad_id: escolaridad,
+                    ocupacion,
+                    direccion,
+                    horario_llamada: horarioLlamada,
+                    conectividad,
+                    valor_hbac1: valorHbac1 ? parseFloat(valorHbac1) : null,
+                    alcohol_drogas: factoresRiesgo?.alcoholDrogas || false,
+                    tabaquismo: factoresRiesgo?.tabaquismo || false,
+                    otros_factores: factoresRiesgo?.otros
+                }
+                : {
+                    puntaje_dpm: puntajeDPM,
+                    diagnostico_dsm: diagnosticoDSM,
+                    localidad
+                };
+    
+            // Actualizar datos de la reevaluación
+            await reevaluacion.update(
+                { 
+                    ...datosComunes, 
+                    ...datosEspecificos 
+                }, 
+                { transaction: t }
+            );
+    
+            // Actualizar datos del paciente
+            const ModeloPaciente = tipo === 'adulto' ? PacienteAdulto : PacienteInfantil;
+            const pacienteId = tipo === 'adulto' 
+                ? reevaluacion.paciente_id 
+                : reevaluacion.paciente_id;
+    
+            await ModeloPaciente.update(
+                {
+                    nombres,
+                    apellidos,
+                    rut,
+                    edad,
+                    telefono_principal: telefonoPrincipal,
+                    telefono_secundario: telefonoSecundario
+                },
+                { 
+                    where: { id: pacienteId },
+                    transaction: t 
+                }
+            );
+    
+            // Manejar tipos de familia
+            await FichaTipoFamilia.destroy({ 
+                where: { 
+                    ficha_clinica_id: id,
+                    tipo_ficha: tipo 
+                }, 
+                transaction: t 
+            });
+    
+            if (tiposFamilia && tiposFamilia.length > 0) {
+                const tipoFamiliaPromesas = tiposFamilia.map(async (tipoId) => {
+                    // Si no hay tipos de familia o es 'Otras', establecer tipo_familia_id como null
+                    await FichaTipoFamilia.create({
+                        ficha_clinica_id: id,
+                        tipo_familia_id: tipoId !== 'Otras' ? tipoId : null,
+                        tipo_familia_otro: tipoId === 'Otras' ? tipoFamiliaOtro : null,
+                        tipo_ficha: tipo
+                    }, { transaction: t });
+                });
+    
+                await Promise.all(tipoFamiliaPromesas);
+            } else if (tipoFamiliaOtro) {
+                // Si no hay tipos de familia pero hay un tipo de familia otro
+                await FichaTipoFamilia.create({
+                    ficha_clinica_id: id,
+                    tipo_familia_id: null,
+                    tipo_familia_otro: tipoFamiliaOtro,
+                    tipo_ficha: tipo
+                }, { transaction: t });
+            }
+    
+            // Manejar factores de riesgo para infantil
+            if (tipo === 'infantil') {
+                // Factores de riesgo del niño
+                await FichaFactorRiesgoNino.destroy({ 
+                    where: { ficha_clinica_id: id }, 
+                    transaction: t 
+                });
+    
+                if (factoresRiesgoNino && factoresRiesgoNino.length > 0) {
+                    const factoresNino = await FactorRiesgoNino.findAll({
+                        where: { nombre: factoresRiesgoNino },
+                        transaction: t
+                    });
+    
+                    const asociacionesNino = factoresNino.map(factor => ({
+                        ficha_clinica_id: id,
+                        factor_riesgo_nino_id: factor.id
+                    }));
+    
+                    await FichaFactorRiesgoNino.bulkCreate(asociacionesNino, { transaction: t });
+                }
+    
+                // Factores de riesgo familiares
+                await FichaFactorRiesgoFamiliar.destroy({ 
+                    where: { ficha_clinica_id: id }, 
+                    transaction: t 
+                });
+    
+                if (factoresRiesgoFamiliares && factoresRiesgoFamiliares.length > 0) {
+                    const factoresPromesas = factoresRiesgoFamiliares.map(async (factorNombre) => {
+                        const factor = await FactorRiesgoFamiliar.findOne({
+                            where: { nombre: factorNombre },
+                            transaction: t
+                        });
+    
+                        if (factor) {
+                            await FichaFactorRiesgoFamiliar.create({
+                                ficha_clinica_id: id,
+                                factor_riesgo_familiar_id: factor.id,
+                                otras: factor.nombre === 'Otras' ? otrosFactoresRiesgoFamiliares : null
+                            }, { transaction: t });
+                        }
+                    });
+    
+                    await Promise.all(factoresPromesas);
+                }
+            }
+    
+            await t.commit();
 
-            // Actualizar la reevaluación
+            // Recuperar la reevaluación actualizada
+            const reevaluacionActualizada = await ModeloFicha.findByPk(id, {
+                include: [
+                    tipo === 'adulto' 
+                        ? { model: PacienteAdulto, as: 'PacienteAdulto' }
+                        : { model: PacienteInfantil, as: 'PacienteInfantil' }
+                ]
+            });
+
+            res.json({ 
+                success: true, 
+                message: 'Reevaluación actualizada exitosamente',
+                data: reevaluacionActualizada 
+            });
+
+        } catch (error) {
+            await t.rollback();
+            console.error('Error al actualizar la reevaluación:', error);
+            res.status(500).json({ 
+                success: false, 
+                message: 'Error al actualizar la reevaluación', 
+                error: error.message 
+            });
+        }
+    };
+
+    export const updateReevaluacionInfantil = async (req, res) => {
+        const t = await sequelize.transaction();
+        try {
+            const { id } = req.params;
+            const {
+                fechaNacimiento,
+                nombres,
+                apellidos,
+                rut,
+                edad,
+                telefonoPrincipal,
+                telefonoSecundario,
+                puntajeDPM,
+                diagnosticoDSM,
+                padres,
+                conQuienVive,
+                tipoFamilia,
+                tipoFamiliaOtro,
+                cicloVitalFamiliar,
+                localidad,
+                factoresRiesgoNino,
+                factoresRiesgoFamiliares,
+                otrosFactoresRiesgoFamiliares
+            } = req.body;
+    
+            // Buscar la reevaluación infantil
+            const reevaluacion = await FichaClinicaInfantil.findByPk(id, { 
+                include: [{ model: PacienteInfantil, as: 'PacienteInfantil' }],
+                transaction: t 
+            });
+    
+            if (!reevaluacion) {
+                await t.rollback();
+                return res.status(404).json({ 
+                    success: false, 
+                    message: 'Reevaluación infantil no encontrada' 
+                });
+            }
+    
+            // Actualizar datos de la ficha clínica infantil
             await reevaluacion.update({
+                con_quien_vive: conQuienVive,
+                ciclo_vital_familiar_id: cicloVitalFamiliar,
                 puntaje_dpm: puntajeDPM,
                 diagnostico_dsm: diagnosticoDSM,
-                con_quien_vive: conQuienVive,
                 localidad
             }, { transaction: t });
-
-            // Actualizar factores de riesgo del niño
-            await FichaFactorRiesgoNino.destroy({ where: { ficha_clinica_id: id }, transaction: t });
+    
+            // Actualizar datos del paciente infantil
+            await PacienteInfantil.update({
+                nombres,
+                apellidos,
+                rut,
+                edad,
+                fecha_nacimiento: fechaNacimiento,
+                telefono_principal: telefonoPrincipal,
+                telefono_secundario: telefonoSecundario
+            }, { 
+                where: { id: reevaluacion.paciente_id },
+                transaction: t 
+            });
+    
+            // Manejar padres/tutores
+            await PadreTutor.destroy({
+                where: { ficha_clinica_id: id },
+                transaction: t
+            });
+    
+            const padresPromesas = padres.map(padre => 
+                PadreTutor.create({
+                    ficha_clinica_id: id,
+                    nombre: padre.nombre,
+                    escolaridad_id: padre.escolaridad,
+                    ocupacion: padre.ocupacion
+                }, { transaction: t })
+            );
+            await Promise.all(padresPromesas);
+    
+            // Manejar tipos de familia
+            await FichaTipoFamilia.destroy({ 
+                where: { 
+                    ficha_clinica_id: id,
+                    tipo_ficha: 'infantil' 
+                }, 
+                transaction: t 
+            });
+    
+            // Crear nuevo registro de tipo de familia
+            if (tipoFamilia === null) {
+                // Si tipoFamilia es null, registrar tipoFamiliaOtro
+                await FichaTipoFamilia.create({
+                    ficha_clinica_id: id,
+                    tipo_familia_id: null, // Guardar null
+                    tipo_familia_otro: tipoFamiliaOtro, // Guardar el texto ingresado
+                    tipo_ficha: 'infantil'
+                }, { transaction: t });
+            } else {
+                // Si hay un tipo de familia definido
+                await FichaTipoFamilia.create({
+                    ficha_clinica_id: id,
+                    tipo_familia_id: tipoFamilia !== 'Otras' ? tipoFamilia : null, // Guardar ID o null
+                    tipo_familia_otro: tipoFamilia === 'Otras' ? tipoFamiliaOtro : null, // Guardar el texto ingresado
+                    tipo_ficha: 'infantil'
+                }, { transaction: t });
+            }
+    
+            // Manejar factores de riesgo del niño
+            await FichaFactorRiesgoNino.destroy({ 
+                where: { ficha_clinica_id: id }, 
+                transaction: t 
+            });
+    
             if (factoresRiesgoNino && factoresRiesgoNino.length > 0) {
                 const factoresNino = await FactorRiesgoNino.findAll({
                     where: { nombre: factoresRiesgoNino },
                     transaction: t
                 });
-                await reevaluacion.setFactoresRiesgoNinoInfantil(factoresNino, { transaction: t });
+    
+                const asociacionesNino = factoresNino.map(factor => ({
+                    ficha_clinica_id: id,
+                    factor_riesgo_nino_id: factor.id
+                }));
+    
+                await FichaFactorRiesgoNino.bulkCreate(asociacionesNino, { transaction: t });
             }
-
-            // Actualizar factores de riesgo familiares
-            await FichaFactorRiesgoFamiliar.destroy({ where: { ficha_clinica_id: id }, transaction: t });
+    
+            // Manejar factores de riesgo familiares
+            await FichaFactorRiesgoFamiliar.destroy({ 
+                where: { ficha_clinica_id: id }, 
+                transaction: t 
+            });
+    
             if (factoresRiesgoFamiliares && factoresRiesgoFamiliares.length > 0) {
-                for (const factorNombre of factoresRiesgoFamiliares) {
+                const factoresPromesas = factoresRiesgoFamiliares.map(async (factorNombre) => {
                     const factor = await FactorRiesgoFamiliar.findOne({
-                        where: { nombre: factorNombre }
+                        where: { nombre: factorNombre },
+                        transaction: t
                     });
+    
                     if (factor) {
                         await FichaFactorRiesgoFamiliar.create({
-                            ficha_clinica_id: reevaluacion.id,
-                            factor_riesgo_familiar_id: factor.id
+                            ficha_clinica_id: id,
+                            factor_riesgo_familiar_id: factor.id,
+                            otras: factor.nombre === 'Otras' ? otrosFactoresRiesgoFamiliares : null
                         }, { transaction: t });
                     }
-                }
+                });
+    
+                await Promise.all(factoresPromesas);
             }
-
+    
+            // Manejar el caso de "Otras" para factores de riesgo familiares
+            if (otrosFactoresRiesgoFamiliares && otrosFactoresRiesgoFamiliares.trim() !== '') {
+                await FichaFactorRiesgoFamiliar.create({
+                    ficha_clinica_id: id,
+                    factor_riesgo_familiar_id: 5, // ID para "Otras"
+                    otras: otrosFactoresRiesgoFamiliares
+                }, { transaction: t });
+            }
+    
             await t.commit();
-            res.json({ success: true, message: 'Reevaluación actualizada exitosamente' });
+    
+            // Recuperar la reevaluación actualizada
+            const reevaluacionActualizada = await FichaClinicaInfantil.findByPk(id, {
+                include: [{ model: PacienteInfantil, as: 'PacienteInfantil' }]
+            });
+    
+            res.json({ 
+                success: true, 
+                message: 'Reevaluación infantil actualizada exitosamente',
+                data: reevaluacionActualizada 
+            });
+    
         } catch (error) {
             await t.rollback();
-            console.error('Error al actualizar la reevaluación:', error);
-            res.status(500).json({ success: false, message: 'Error al actualizar la reevaluación', error: error.message });
+            console.error('Error al actualizar la reevaluación infantil:', error);
+            res.status(500).json({ 
+                success: false, 
+                message: 'Error al actualizar la reevaluación infantil', 
+                error: error.message 
+            });
         }
     };

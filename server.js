@@ -10,6 +10,7 @@ import institucionRoutes from './routes/institucionRoutes.js';
 import asignacionesRoutes from './routes/asignacionesRoutes.js';
 import fichaClinicaRoutes from './routes/fichaClinicaRoutes.js';
 import seguimientosRoutes from './routes/seguimientosRoutes.js';
+import reportesRoutes from './routes/reportesRoutes.js';
 
 // Crear la instancia de express
 const app = express();
@@ -27,6 +28,7 @@ app.use('/api/instituciones', institucionRoutes);
 app.use('/api/asignaciones', asignacionesRoutes);
 app.use('/api/fichas-clinicas', fichaClinicaRoutes);
 app.use('/api/seguimientos', seguimientosRoutes);
+app.use('/api/reportes', reportesRoutes);
 
 // Manejo de errores global
 app.use((err, req, res, next) => {

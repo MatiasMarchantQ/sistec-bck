@@ -3,7 +3,9 @@ import Asignacion from '../models/Asignacion.js';
 import Estudiante from '../models/Estudiante.js';
 import Institucion from '../models/Institucion.js';
 import Receptor from '../models/Receptor.js';
+import Usuario from '../models/Usuario.js';
 import { Op, Sequelize } from 'sequelize';
+import sequelize from '../models/index.js';
 
 // Obtener todas las asignaciones
 export const obtenerAsignaciones = async (req, res) => {
@@ -159,53 +161,88 @@ export const obtenerInstitucionesConAsignaciones = async (req, res) => {
 
 // Crear una nueva asignación
 export const crearAsignacion = async (req, res) => {
+  const transaction = await sequelize.transaction();
+
   try {
-    const { estudiante_id, institucion_id, receptor_id, fecha_inicio, fecha_fin } = req.body;
+    const { 
+      estudiante_id, 
+      institucion_id, 
+      receptor_id, 
+      fecha_inicio, 
+      fecha_fin,
+      es_asignacion_excepcional = false,
+      justificacion_excepcional
+    } = req.body;
+
     // Verificar si el estudiante y la institución existen
     const estudiante = await Estudiante.findByPk(estudiante_id);
     const institucion = await Institucion.findByPk(institucion_id);
 
     if (!estudiante || !institucion) {
+      await transaction.rollback();
       return res.status(400).json({ error: 'Estudiante o institución no encontrados' });
     }
 
-    // Verificar si ya hay asignaciones para el mismo receptor en el mismo periodo
+    // Verificar asignaciones existentes para el receptor en el mismo periodo
     const asignacionesExistentes = await Asignacion.findAll({
       where: {
         institucion_id,
         receptor_id,
         [Op.and]: [
-          {
-            // Nueva fecha de inicio debe ser menor o igual a la fecha de fin existente
-            fecha_inicio: { [Op.lte]: fecha_fin },
-          },
-          {
-            // Nueva fecha de fin debe ser mayor o igual a la fecha de inicio existente
-            fecha_fin: { [Op.gte]: fecha_inicio }
-          }
+          { fecha_inicio: { [Op.lte]: fecha_fin } },
+          { fecha_fin: { [Op.gte]: fecha_inicio } }
         ]
       }
     });
 
-    // Si hay asignaciones existentes para el mismo receptor y periodo, retornar error
-    if (asignacionesExistentes.length > 0) {
-      return res.status(400).json({ error: 'Ya hay asignaciones para este receptor en este periodo.' });
+    // Si hay asignaciones existentes y NO es una asignación excepcional
+    if (asignacionesExistentes.length > 0 && !es_asignacion_excepcional) {
+      await transaction.rollback();
+      return res.status(400).json({ 
+        error: 'Ya hay asignaciones para este receptor en este periodo.',
+        asignaciones: asignacionesExistentes.map(a => ({
+          estudiante: a.estudiante_id,
+          fecha_inicio: a.fecha_inicio,
+          fecha_fin: a.fecha_fin
+        }))
+      });
     }
+
+    // Si es una asignación excepcional, requiere justificación
+    if (es_asignacion_excepcional && !justificacion_excepcional) {
+      await transaction.rollback();
+      return res.status(400).json({ 
+        error: 'Se requiere una justificación para la asignación excepcional'
+      });
+    }
+
     // Crear nueva asignación
     const nuevaAsignacion = await Asignacion.create({
       estudiante_id,
       institucion_id,
       receptor_id,
       fecha_inicio,
-      fecha_fin
-    });
+      fecha_fin,
+      es_asignacion_excepcional,
+      justificacion_excepcional
+    }, { transaction });
+
+    // Notificar sobre asignación excepcional si aplica
+    if (es_asignacion_excepcional) {
+      await notificarAsignacionExcepcional(nuevaAsignacion, req.user);
+    }
+
+    await transaction.commit();
 
     res.status(201).json({
-      mensaje: 'Asignación creada exitosamente',
+      mensaje: es_asignacion_excepcional 
+        ? 'Asignación excepcional creada exitosamente' 
+        : 'Asignación creada exitosamente',
       asignacion: nuevaAsignacion
     });
 
   } catch (error) {
+    await transaction.rollback();
     console.error('Error al crear asignación:', error);
     res.status(500).json({
       error: 'Error al crear asignación',
@@ -213,6 +250,88 @@ export const crearAsignacion = async (req, res) => {
     });
   }
 };
+
+// Función para notificar sobre asignación excepcional
+async function notificarAsignacionExcepcional(asignacion) {
+  try {
+    console.log('Asignación recibida (JSON):', JSON.stringify(asignacion));
+    console.log('Asignación recibida (Objeto):', asignacion);
+    
+    // Extraer el ID de manera segura
+    const asignacionId = asignacion.id;
+    
+    if (!asignacionId) {
+      console.error('No se pudo encontrar el ID de la asignación');
+      return;
+    }
+
+    console.log('Asignación ID:', asignacionId);
+    
+    // Busca la asignación con todas las relaciones
+    const asignacionCompleta = await Asignacion.findOne({
+      where: { id: asignacionId },
+      include: [
+        { 
+          model: Estudiante, 
+          attributes: ['id', 'nombres', 'correo'] 
+        },
+        { 
+          model: Institucion, 
+          attributes: ['id', 'nombre'] 
+        },
+        {
+          model: Receptor,
+          attributes: ['id', 'nombre']
+        }
+      ]
+    });
+
+    // Verificaciones adicionales de depuración
+    console.log('Resultado de findOne:', asignacionCompleta);
+    console.log('Existe asignacionCompleta:', !!asignacionCompleta);
+    
+    if (!asignacionCompleta) {
+      // Intentar encontrar la asignación sin incluir relaciones
+      const asignacionBasica = await Asignacion.findByPk(asignacionId);
+      console.log('Asignación básica encontrada:', asignacionBasica);
+      
+      // Verificar si existen los modelos relacionados
+      const estudianteExiste = await Estudiante.findByPk(asignacion.estudiante_id);
+      const institucionExiste = await Institucion.findByPk(asignacion.institucion_id);
+      const receptorExiste = await Receptor.findByPk(asignacion.receptor_id);
+
+      console.log('Estudiante existe:', !!estudianteExiste);
+      console.log('Institución existe:', !!institucionExiste);
+      console.log('Receptor existe:', !!receptorExiste);
+
+      console.error('No se encontró la asignación');
+      return;
+    }
+
+    // Aquí podrías hacer algo con asignacionCompleta si lo necesitas
+    console.log('Detalles de la asignación:', {
+      estudiante: asignacionCompleta.estudiante?.nombres,
+      institucion: asignacionCompleta.institucion?.nombre,
+      receptor: asignacionCompleta.receptor?.nombre
+    });
+
+  } catch (error) {
+    console.error('Error completo:', error);
+    // Imprimir detalles específicos del error
+    console.error('Nombre del error:', error.name);
+    console.error('Mensaje del error:', error.message);
+    console.error('Pila de error:', error.stack);
+  }
+}
+
+// Función de utilidad para formatear fechas
+function formatearFecha(fecha) {
+  return new Date(fecha).toLocaleDateString('es-CL', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  });
+}
 
 // Actualizar una asignación
 export const actualizarAsignacion = async (req, res) => {

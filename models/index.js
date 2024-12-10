@@ -13,7 +13,7 @@ const sequelize = new Sequelize(
     host: process.env.DB_HOST,
     dialect: 'mysql',
     port: process.env.DB_PORT || 3306,
-    logging: false, // Puedes cambiarlo a true si quieres ver las consultas SQL en la consola
+    logging: false,
     pool: {
       max: 5,
       min: 0,
@@ -23,11 +23,17 @@ const sequelize = new Sequelize(
   }
 );
 
-// Probar la conexión
-try {
-  await sequelize.authenticate();
-} catch (error) {
-  console.error('No se pudo conectar a la base de datos:', error);
+// Función para probar la conexión
+async function testConnection() {
+  try {
+    await sequelize.authenticate();
+    console.log('Conexión a la base de datos establecida correctamente.');
+  } catch (error) {
+    console.error('No se pudo conectar a la base de datos:', error);
+  }
 }
+
+// Llamar a la función de prueba de conexión
+testConnection();
 
 export default sequelize;
