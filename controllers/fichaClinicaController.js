@@ -1972,6 +1972,8 @@ function formatearReevaluacionInfantil(reevaluacion) {
                 otrosFactoresRiesgoFamiliares
             } = req.body;
     
+            console.log(req.body);
+
             // Validar el tipo de reevaluación
             if (!tipo || (tipo !== 'adulto' && tipo !== 'infantil')) {
                 return res.status(400).json({ 

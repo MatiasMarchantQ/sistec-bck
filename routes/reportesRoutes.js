@@ -8,6 +8,6 @@ import {
 const router = express.Router();
 
 //Rutas de dashboard
-router.get('/dashboard', verifyToken, obtenerDatosDashboard);
+router.get('/dashboard', obtenerDatosDashboard);
 
 export default router;

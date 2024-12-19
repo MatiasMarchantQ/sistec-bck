@@ -27,5 +27,4 @@ router.get('/factores-riesgo-nino', verifyToken, obtenerFactoresRiesgoNino);
 router.get('/factores-riesgo-familiar', verifyToken, obtenerFactoresRiesgoFamiliar);
 router.get('/diagnosticos', verifyToken, obtenerDiagnosticos);
 
-
 export default router;

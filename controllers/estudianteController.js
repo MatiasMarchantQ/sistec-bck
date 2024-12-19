@@ -90,16 +90,33 @@ export const enviarCredencialesMasivo = async (req, res) => {
   }
 };
 
-// Función para generar contraseña temporal
-const generarContrasenaTemporalSegura = () => {
-  const caracteres = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()';
-  const longitudContrasena = 12;
+// Función para generar contraseña temporal segura
+const generarContrasenaTemporalSegura = (longitudMinima = 12, longitudMaxima = 16) => {
+  const caracteresMayusculas = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const caracteresMinusculas = 'abcdefghijklmnopqrstuvwxyz';
+  const caracteresNumeros = '0123456789';
+  const caracteresEspeciales = '!@#$%^&*()';
+  
+  // Asegurarse de que la longitud esté dentro de los límites
+  const longitudContrasena = Math.floor(Math.random() * (longitudMaxima - longitudMinima + 1)) + longitudMinima;
+  
   let contrasena = '';
   
-  for (let i = 0; i < longitudContrasena; i++) {
-    const indiceAleatorio = Math.floor(Math.random() * caracteres.length);
-    contrasena += caracteres[indiceAleatorio];
+  // Asegurarse de incluir al menos un carácter de cada tipo
+  contrasena += caracteresMayusculas[Math.floor(Math.random() * caracteresMayusculas.length)];
+  contrasena += caracteresMinusculas[Math.floor(Math.random() * caracteresMinusculas.length)];
+  contrasena += caracteresNumeros[Math.floor(Math.random() * caracteresNumeros.length)];
+  contrasena += caracteresEspeciales[Math.floor(Math.random() * caracteresEspeciales.length)];
+  
+  // Rellenar el resto de la contraseña con caracteres aleatorios
+  const todosLosCaracteres = caracteresMayusculas + caracteresMinusculas + caracteresNumeros + caracteresEspeciales;
+  for (let i = contrasena.length; i < longitudContrasena; i++) {
+    const indiceAleatorio = Math.floor(Math.random() * todosLosCaracteres.length);
+    contrasena += todosLosCaracteres[indiceAleatorio];
   }
+  
+  // Mezclar la contraseña para que los caracteres no estén en un orden predecible
+  contrasena = contrasena.split('').sort(() => Math.random() - 0.5).join('');
   
   return contrasena;
 };
@@ -109,14 +126,24 @@ export const cambiarContrasenaEstudiante = async (req, res) => {
     const { id } = req.params;
     const { nuevaContrasena } = req.body;
 
+    // Validación de la nueva contraseña
+    const regexContrasena = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,20}$/; // Al menos una minúscula, una mayúscula, un número y longitud entre 8 y 20
+    if (!regexContrasena.test(nuevaContrasena)) {
+      return res.status(400).json({ error: 'La nueva contraseña debe contener al menos una letra mayúscula, una letra minúscula, un número y tener entre 8 y 20 caracteres.' });
+    }
+
     const estudiante = await Estudiante.findByPk(id);
     if (!estudiante) {
       return res.status(404).json({ error: 'Estudiante no encontrado' });
     }
 
-    // Actualizar contraseña sin hashear
+    // Generar nueva contraseña hasheada
+    const salt = await bcrypt.genSalt(10);
+    const nuevaContrasenaHash = await bcrypt.hash(nuevaContrasena, salt);
+
+    // Actualizar contraseña hasheada y el estado de debe_cambiar_contrasena
     await estudiante.update({
-      contrasena: nuevaContrasena,
+      contrasena: nuevaContrasenaHash,
       debe_cambiar_contrasena: false
     });
 

@@ -5,15 +5,33 @@ import bcrypt from 'bcrypt';
 import { enviarCredencialesUsuario } from '../services/emailService.js';
 import { Op } from 'sequelize';
 
-const generarContrasenaTemporalSegura = () => {
-  const caracteres = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()';
-  const longitudContrasena = 12;
+// Función para generar contraseña temporal segura
+const generarContrasenaTemporalSegura = (longitudMinima = 12, longitudMaxima = 16) => {
+  const caracteresMayusculas = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const caracteresMinusculas = 'abcdefghijklmnopqrstuvwxyz';
+  const caracteresNumeros = '0123456789';
+  const caracteresEspeciales = '!@#$%^&*()';
+  
+  // Asegurarse de que la longitud esté dentro de los límites
+  const longitudContrasena = Math.floor(Math.random() * (longitudMaxima - longitudMinima + 1)) + longitudMinima;
+  
   let contrasena = '';
   
-  for (let i = 0; i < longitudContrasena; i++) {
-    const indiceAleatorio = Math.floor(Math.random() * caracteres.length);
-    contrasena += caracteres[indiceAleatorio];
+  // Asegurarse de incluir al menos un carácter de cada tipo
+  contrasena += caracteresMayusculas[Math.floor(Math.random() * caracteresMayusculas.length)];
+  contrasena += caracteresMinusculas[Math.floor(Math.random() * caracteresMinusculas.length)];
+  contrasena += caracteresNumeros[Math.floor(Math.random() * caracteresNumeros.length)];
+  contrasena += caracteresEspeciales[Math.floor(Math.random() * caracteresEspeciales.length)];
+  
+  // Rellenar el resto de la contraseña con caracteres aleatorios
+  const todosLosCaracteres = caracteresMayusculas + caracteresMinusculas + caracteresNumeros + caracteresEspeciales;
+  for (let i = contrasena.length; i < longitudContrasena; i++) {
+    const indiceAleatorio = Math.floor(Math.random() * todosLosCaracteres.length);
+    contrasena += todosLosCaracteres[indiceAleatorio];
   }
+  
+  // Mezclar la contraseña para que los caracteres no estén en un orden predecible
+  contrasena = contrasena.split('').sort(() => Math.random() - 0.5).join('');
   
   return contrasena;
 };

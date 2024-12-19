@@ -106,6 +106,7 @@ export const crearUsuario = async (req, res) => {
     });
   }
 };
+
 export const login = async (req, res) => {
   try {
     const { rut, contrasena, rememberMe } = req.body;
@@ -390,6 +391,12 @@ export const cambiarContrasena = async (req, res) => {
     console.log('Rol del usuario:', userRolId);
     let usuario;
 
+    // Validación de la nueva contraseña
+    const regexContrasena = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,20}$/; // Al menos una minúscula, una mayúscula, un número y longitud entre 8 y 20
+    if (!regexContrasena.test(nuevaContrasena)) {
+      return res.status(400).json({ error: 'La nueva contraseña debe contener al menos una letra mayúscula, una letra minúscula, un número y tener entre 8 y 20 caracteres.' });
+    }
+
     // Si el rol es 3, buscamos en Estudiante
     if (userRolId === 3) {
       // Buscar en Estudiante usando el userId
@@ -406,6 +413,12 @@ export const cambiarContrasena = async (req, res) => {
         if (!validPassword) {
           return res.status(401).json({ error: 'Contraseña actual incorrecta' });
         }
+      }
+
+      // Verificar que la nueva contraseña no sea igual a la actual
+      const contrasenaActualHash = usuario.contrasena;
+      if (await bcrypt.compare(nuevaContrasena, contrasenaActualHash)) {
+        return res.status(400).json({ error: 'La nueva contraseña no puede ser igual a la contraseña actual.' });
       }
 
       // Generar nueva contraseña hasheada
@@ -438,6 +451,12 @@ export const cambiarContrasena = async (req, res) => {
         if (!validPassword) {
           return res.status(401).json({ error: 'Contraseña actual incorrecta' });
         }
+      }
+
+      // Verificar que la nueva contraseña no sea igual a la actual
+      const contrasenaActualHash = usuario.contrasena;
+      if (await bcrypt.compare(nuevaContrasena, contrasenaActualHash)) {
+        return res.status(400).json({ error: 'La nueva contraseña no puede ser igual a la contraseña actual.' });
       }
 
       // Generar nueva contraseña hasheada
@@ -604,6 +623,12 @@ export const solicitarRecuperacionContrasena = async (req, res) => {
 export const restablecerContrasena = async (req, res) => {
   try {
     const { token, nuevaContrasena } = req.body;
+
+    // Validación de la nueva contraseña
+    const regexContrasena = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,20}$/; // Al menos una minúscula, una mayúscula, un número y longitud entre 8 y 20
+    if (!regexContrasena.test(nuevaContrasena)) {
+      return res.status(400).json({ error: 'La nueva contraseña debe contener al menos una letra mayúscula, una letra minúscula, un número y tener entre 8 y 20 caracteres.' });
+    }
 
     // Verificar token
     let decoded;

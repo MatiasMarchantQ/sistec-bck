@@ -23,7 +23,6 @@ router.delete('/:id', eliminarEstudiante);
 
 router.post('/enviar-credenciales-masivo', enviarCredencialesMasivo);
 
-// En estudianteRoutes.js
 router.put('/:id/cambiar-contrasena', cambiarContrasenaEstudiante);
 router.post('/:id/enviar-credencial', enviarCredencialIndividual);
 

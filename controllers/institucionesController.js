@@ -190,6 +190,46 @@ export const agregarReceptor = async (req, res) => {
       res.status(500).json({ error: 'Error al eliminar el receptor' });
     }
   };
+
+  export const obtenerInstitucionPorId = async (req, res) => {
+    try {
+      const { id } = req.params;
+      const institucion = await Institucion.findByPk(id, {
+        attributes: ['id', 'nombre', 'tipo_id']
+      });
+  
+      if (!institucion) {
+        return res.status(404).json({ error: 'Institución no encontrada' });
+      }
+  
+      res.json(institucion);
+    } catch (error) {
+      console.error('Error al obtener institución:', error);
+      res.status(500).json({ error: 'Error al obtener la institución' });
+    }
+  };
+  
+  // En controllers/obtenerController.js
+  export const obtenerReceptorPorId = async (req, res) => {
+    try {
+      const { id } = req.params;
+      const receptor = await Receptor.findByPk(id, {
+        include: [{ 
+          model: Institucion, 
+          attributes: ['id', 'nombre'] 
+        }]
+      });
+  
+      if (!receptor) {
+        return res.status(404).json({ error: 'Receptor no encontrado' });
+      }
+  
+      res.json(receptor);
+    } catch (error) {
+      console.error('Error al obtener receptor:', error);
+      res.status(500).json({ error: 'Error al obtener el receptor' });
+    }
+  };
   
   // Modificar el export default para incluir las nuevas funciones
   export default {
@@ -198,5 +238,7 @@ export const agregarReceptor = async (req, res) => {
     actualizarInstitucion,
     agregarReceptor,
     actualizarReceptor,
-    eliminarReceptor
+    eliminarReceptor,
+    obtenerInstitucionPorId,
+    obtenerReceptorPorId
   };

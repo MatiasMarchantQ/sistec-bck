@@ -19,4 +19,7 @@ router.post('/:institucion_id/receptores', verifyToken, institucionesController.
 router.put('/receptores/:receptor_id', verifyToken, institucionesController.actualizarReceptor);
 router.delete('/receptores/:receptor_id', verifyToken, institucionesController.eliminarReceptor);
 
+router.get('/:id', verifyToken, institucionesController.obtenerInstitucionPorId);
+router.get('/receptor/:id', verifyToken, institucionesController.obtenerReceptorPorId);
+
 export default router;
