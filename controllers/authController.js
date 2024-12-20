@@ -504,7 +504,7 @@ export const getMe = async (req, res) => {
   }
 };
 
-// Controlador para actualizar datos del usuario
+//Gestion datos personales
 export const actualizarUsuario = async (req, res) => {
   try {
     const { id } = req.params;
@@ -538,6 +538,59 @@ export const actualizarUsuario = async (req, res) => {
     res.json({ mensaje: 'Datos actualizados correctamente' });
   } catch (error) {
     console.error('Error al actualizar usuario:', error);
+    res.status(500).json({ error: 'Error al actualizar los datos' });
+  }
+};
+
+export const actualizarEstudiante = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { nombres, apellidos, correo, rut } = req.body;
+
+    // Verificar si el estudiante existe
+    const estudiante = await Estudiante.findByPk(id);
+
+    if (!estudiante) {
+      return res.status(404).json({ mensaje: 'Estudiante no encontrado' });
+    }
+
+    // Validaciones
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const rutRegex = /^\d{7,8}$/; // Solo números entre 7 y 8 dígitos
+
+    if (!emailRegex.test(correo)) {
+      return res.status(400).json({ mensaje: 'Correo electrónico inválido' });
+    }
+
+    if (!rutRegex.test(rut)) {
+      return res.status(400).json({ mensaje: 'RUT inválido. Debe contener entre 7 y 8 números sin puntos ni guión' });
+    }
+
+    // Actualizar los datos
+    await Estudiante.update(
+      { 
+        nombres, 
+        apellidos, 
+        correo, 
+        rut 
+      }, 
+      { 
+        where: { id } 
+      }
+    );
+
+    // Obtener los datos actualizados
+    const estudianteActualizado = await Estudiante.findByPk(id, {
+      attributes: ['id', 'nombres', 'apellidos', 'correo', 'rut']
+    });
+
+    res.json({ 
+      mensaje: 'Datos actualizados correctamente',
+      estudiante: estudianteActualizado
+    });
+
+  } catch (error) {
+    console.error('Error al actualizar estudiante:', error);
     res.status(500).json({ error: 'Error al actualizar los datos' });
   }
 };

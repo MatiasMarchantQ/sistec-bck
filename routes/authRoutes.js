@@ -10,6 +10,7 @@ import {
   logout,
   cambiarContrasena,
   actualizarUsuario,
+  actualizarEstudiante,
   getMe,
   solicitarRecuperacionContrasena,
   restablecerContrasena
@@ -34,6 +35,7 @@ router.post('/usuarios', verifyToken, crearUsuario);
 router.get('/me', verifyToken, getMe);
 
 router.put('/usuarios/:id', verifyToken, actualizarUsuario);
+router.put('/estudiantes/:id', verifyToken, actualizarEstudiante);
 
 // Rutas públicas para recuperación de contraseña
 router.post('/recuperar-contrasena', solicitarRecuperacionContrasena);

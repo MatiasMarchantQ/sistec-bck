@@ -1,6 +1,7 @@
 // controllers/asignacionesController.js
 import Asignacion from '../models/Asignacion.js';
 import Estudiante from '../models/Estudiante.js';
+import TipoInstitucion from '../models/TipoInstitucion.js';
 import Institucion from '../models/Institucion.js';
 import Receptor from '../models/Receptor.js';
 import Usuario from '../models/Usuario.js';
@@ -216,7 +217,14 @@ export const obtenerAsignacionesAgenda = async (req, res) => {
         },
         { 
           model: Institucion,
-          attributes: ['id', 'nombre']
+          attributes: ['id', 'nombre', 'tipo_id'],
+          include: [
+            {
+              model: TipoInstitucion,
+              as: 'tipoInstitucion',
+              attributes: ['id', 'tipo']
+            }
+          ]
         },
         { 
           model: Receptor,

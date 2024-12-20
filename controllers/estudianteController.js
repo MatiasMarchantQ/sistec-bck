@@ -127,7 +127,7 @@ export const cambiarContrasenaEstudiante = async (req, res) => {
     const { nuevaContrasena } = req.body;
 
     // Validación de la nueva contraseña
-    const regexContrasena = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,20}$/; // Al menos una minúscula, una mayúscula, un número y longitud entre 8 y 20
+    const regexContrasena = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,20}$/; 
     if (!regexContrasena.test(nuevaContrasena)) {
       return res.status(400).json({ error: 'La nueva contraseña debe contener al menos una letra mayúscula, una letra minúscula, un número y tener entre 8 y 20 caracteres.' });
     }
@@ -137,20 +137,19 @@ export const cambiarContrasenaEstudiante = async (req, res) => {
       return res.status(404).json({ error: 'Estudiante no encontrado' });
     }
 
-    // Generar nueva contraseña hasheada
-    const salt = await bcrypt.genSalt(10);
-    const nuevaContrasenaHash = await bcrypt.hash(nuevaContrasena, salt);
-
-    // Actualizar contraseña hasheada y el estado de debe_cambiar_contrasena
+    // Actualizar contraseña en texto plano
     await estudiante.update({
-      contrasena: nuevaContrasenaHash,
+      contrasena: nuevaContrasena,
       debe_cambiar_contrasena: false
     });
 
-    // // Enviar correo de notificación con la nueva contraseña
+    // Enviar correo de notificación con la nueva contraseña
     // await enviarCredencialesEstudiante(estudiante, nuevaContrasena);
 
-    res.status(200).json({ mensaje: 'Contraseña cambiada exitosamente' });
+    res.status(200).json({ 
+      mensaje: 'Contraseña cambiada exitosamente',
+      correo: estudiante.correo 
+    });
   } catch (error) {
     console.error('Error al cambiar contraseña:', error);
     res.status(500).json({
@@ -174,17 +173,32 @@ export const enviarCredencialIndividual = async (req, res) => {
       return res.status(403).json({ error: 'No se puede enviar credenciales a un estudiante inactivo' });
     }
 
-    // SIEMPRE generar una nueva contraseña temporal
-    const contrasenatemporal = generarContrasenaTemporalSegura();
+    let contrasenaEnviar;
     
-    // Actualizar contraseña del estudiante
-    await estudiante.update({
-      contrasena: contrasenatemporal,
-      debe_cambiar_contrasena: true
-    });
+    // Verificar si la contraseña actual está en texto plano o hasheada
+    const esContrasenaHasheada = /^\$2[aby]\$\d{2}\$/.test(estudiante.contrasena);
 
-    // Enviar credenciales con la nueva contraseña temporal
-    await enviarCredencialesEstudiante(estudiante, contrasenatemporal);
+    if (esContrasenaHasheada) {
+      // Si está hasheada, generar contraseña temporal
+      contrasenaEnviar = generarContrasenaTemporalSegura();
+      
+      // Actualizar contraseña del estudiante
+      await estudiante.update({
+        contrasena: contrasenaEnviar,
+        debe_cambiar_contrasena: true
+      });
+    } else {
+      // Si está en texto plano, usar la contraseña existente
+      contrasenaEnviar = estudiante.contrasena;
+      
+      // Actualizar estado de debe_cambiar_contrasena
+      await estudiante.update({
+        debe_cambiar_contrasena: false
+      });
+    }
+
+    // Enviar credenciales con la contraseña
+    await enviarCredencialesEstudiante(estudiante, contrasenaEnviar);
 
     res.status(200).json({ 
       mensaje: 'Credenciales enviadas exitosamente',
@@ -192,7 +206,7 @@ export const enviarCredencialIndividual = async (req, res) => {
       rut: estudiante.rut,
       nombres: estudiante.nombres,
       apellidos: estudiante.apellidos,
-      debe_cambiar_contrasena: true // Siempre será true al generar nueva contraseña
+      debe_cambiar_contrasena: esContrasenaHasheada // Será true solo si era contraseña hasheada
     });
   } catch (error) {
     console.error('Error al enviar credenciales:', error);
