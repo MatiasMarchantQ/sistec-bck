@@ -98,6 +98,14 @@ export const cambiarContrasenaUsuario = async (req, res) => {
     const { id } = req.params;
     const { nuevaContrasena } = req.body;
 
+    // Validación de la nueva contraseña
+    const regexContrasena = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,20}$/; // Al menos una minúscula, una mayúscula, un número y longitud entre 8 y 20
+    if (!regexContrasena.test(nuevaContrasena)) {
+      return res.status(400).json({ 
+        error: 'La nueva contraseña debe contener al menos una letra mayúscula, una letra minúscula, un número y tener entre 8 y 20 caracteres.' 
+      });
+    }
+
     const usuario = await Usuario.findByPk(id);
     if (!usuario) {
       return res.status(404).json({ error: 'Usuario no encontrado' });
@@ -106,11 +114,8 @@ export const cambiarContrasenaUsuario = async (req, res) => {
     // Actualizar contraseña sin hashear
     await usuario.update({
       contrasena: nuevaContrasena,
-      debe_cambiar_contrasena: false
+      debe_cambiar_contrasena: true
     });
-
-    // // Enviar correo de notificación con la nueva contraseña
-    // await enviarCredencialesUsuario(usuario, nuevaContrasena);
 
     res.status(200).json({ mensaje: 'Contraseña cambiada exitosamente' });
   } catch (error) {

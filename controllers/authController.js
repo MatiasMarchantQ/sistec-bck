@@ -222,13 +222,22 @@ export const loginDirectores = async (req, res) => {
       });
     }
 
+    // Función para verificar si una contraseña está hasheada
+    const esContrasenaHasheada = (contrasena) => {
+      return (
+        contrasena && 
+        (contrasena.startsWith('$2b$') || // Bcrypt
+         contrasena.startsWith('$2a$') || // Bcrypt
+         contrasena.length > 60) // Longitud típica de hash
+    )};
+
     // Validar contraseña
     let validPassword;
-    if (user.debe_cambiar_contrasena) {
-      // La contraseña es temporal y se almacena como texto plano
+    if (!esContrasenaHasheada(user.contrasena)) {
+      // Si la contraseña no está hasheada, comparar directamente
       validPassword = user.contrasena === contrasena;
     } else {
-      // La contraseña está hasheada
+      // Si la contraseña está hasheada, usar bcrypt
       validPassword = await bcrypt.compare(contrasena, user.contrasena);
     }
 
