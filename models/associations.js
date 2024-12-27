@@ -20,6 +20,7 @@ import NivelEscolaridad from './NivelEscolaridad.js';
 import Diagnostico from './Diagnostico.js';
 import SeguimientoAdulto from './SeguimientoAdulto.js';
 import PacienteAdulto from './PacienteAdulto.js';
+import DiagnosticoFichaAdulto from './DiagnosticoFichaAdulto.js';
 
 export function setupAssociations() {
   Institucion.hasMany(Receptor, { as: 'receptores', foreignKey: 'institucion_id' });
@@ -199,4 +200,23 @@ Institucion.belongsTo(TipoInstitucion, {
   as: 'tipoInstitucion'
 });
 
+DiagnosticoFichaAdulto.belongsTo(Diagnostico, {
+  foreignKey: 'diagnostico_id',
+  as: 'Diagnostico'
+});
+
+Diagnostico.hasMany(DiagnosticoFichaAdulto, {
+  foreignKey: 'diagnostico_id',
+  as: 'DiagnosticoFichaAdulto'
+});
+
+FichaClinicaAdulto.hasMany(DiagnosticoFichaAdulto, {
+  foreignKey: 'ficha_clinica_id',
+  as: 'DiagnosticoFichas'
+});
+
+DiagnosticoFichaAdulto.belongsTo(FichaClinicaAdulto, {
+  foreignKey: 'ficha_clinica_id',
+  as: 'FichaClinicaAdulto'
+});
 }

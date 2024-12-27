@@ -5,8 +5,7 @@ import FichaClinicaInfantil from '../models/FichaClinicaInfantil.js';
 import NivelEscolaridad from '../models/NivelEscolaridad.js';
 import CicloVitalFamiliar from '../models/CicloVitalFamiliar.js';
 import TipoFamilia from '../models/TipoFamilia.js';
-import FichaCicloVital from '../models/FichaCicloVital.js';  // Añade esta línea
-import FichaTipoFamilia from '../models/FichaTipoFamilia.js';  // Añade esta línea si no está
+import FichaTipoFamilia from '../models/FichaTipoFamilia.js';
 import FactorRiesgoNino from '../models/FactorRiesgoNino.js';
 import FactorRiesgoFamiliar from '../models/FactorRiesgoFamiliar.js';
 import FichaFactorRiesgoNino from '../models/FichaFactorRiesgoNino.js';
@@ -19,6 +18,8 @@ import Usuario from '../models/Usuario.js';
 import sequelize from '../models/index.js';
 import { Op, Sequelize } from 'sequelize';
 import Estudiante from '../models/Estudiante.js';
+import DiagnosticoFichaAdulto from '../models/DiagnosticoFichaAdulto.js';
+import ExcelJS from 'exceljs';
 
 export const getFichasClinicasPorInstitucion = async (req, res) => {
     try {
@@ -122,9 +123,13 @@ export const getFichasClinicasPorInstitucion = async (req, res) => {
                     attributes: ['id', 'nombres', 'apellidos', 'rut', 'edad']
                 },
                 {
-                    model: Diagnostico,
-                    attributes: ['id', 'nombre'],
-                    as: 'diagnostico'
+                    model: DiagnosticoFichaAdulto,
+                    as: 'DiagnosticoFichas',
+                    include: [{
+                        model: Diagnostico,
+                        as: 'Diagnostico',
+                        attributes: ['id', 'nombre']
+                    }]
                 },
             ],
             order: [['createdAt', 'DESC']]
@@ -206,10 +211,13 @@ export const getFichasClinicasPorInstitucion = async (req, res) => {
                 rut: ficha.PacienteAdulto.rut,
                 edad: ficha.PacienteAdulto.edad
             },
-            diagnostico: {
-                id: ficha.diagnostico_id,
-                nombre: ficha.diagnostico && ficha.diagnostico.nombre ? ficha.diagnostico.nombre : ficha.diagnostico_otro,
-            },
+            diagnosticos: ficha.DiagnosticoFichas.map(diagnostico => ({
+                id: diagnostico.Diagnostico ? diagnostico.Diagnostico.id : null,
+                nombre: diagnostico.es_diagnostico_otro 
+                    ? diagnostico.diagnostico_otro_texto 
+                    : (diagnostico.Diagnostico ? diagnostico.Diagnostico.nombre : 'Sin diagnóstico'),
+                esOtro: diagnostico.es_diagnostico_otro
+            })),
             reevaluaciones: reevaluacionesAdultosPorPaciente[ficha.PacienteAdulto.id] || 0,
             createdAt: ficha.createdAt,
             updatedAt: ficha.updatedAt
@@ -283,7 +291,7 @@ export const createFichaClinicaAdulto = async (req, res) => {
             apellidos,
             rut,
             edad,
-            diagnostico_id,
+            diagnosticos_id,
             diagnostico_otro,
             escolaridad,
             ocupacion,
@@ -312,20 +320,11 @@ export const createFichaClinicaAdulto = async (req, res) => {
             });
         }
 
-        // Validación de diagnóstico
-        if (!diagnostico_id && !diagnostico_otro) {
+        if (!diagnosticos_id || (diagnosticos_id.length === 0 && !diagnostico_otro)) {
             return res.status(400).json({
                 success: false,
-                message: 'Debe proporcionar un diagnóstico (predefinido o personalizado)'
+                message: 'Debe proporcionar al menos un diagnóstico (predefinido o personalizado)'
             });
-        }
-
-        // Si se proporciona un ID de diagnóstico, validar que exista
-        if (diagnostico_id) {
-            const diagnosticoExistente = await Diagnostico.findByPk(diagnostico_id, { transaction: t });
-            if (!diagnosticoExistente) {
-                throw new Error('Diagnóstico seleccionado no válido');
-            }
         }
 
         // Crear o actualizar paciente
@@ -362,8 +361,7 @@ export const createFichaClinicaAdulto = async (req, res) => {
         const fichaClinica = await FichaClinicaAdulto.create({
             paciente_id: paciente.id,
             fecha_evaluacion: new Date(),
-            diagnostico_id: diagnostico_id || null,
-            diagnostico_otro: diagnostico_otro || null,
+            diagnostico_otro: null,
             escolaridad_id: nivelEscolaridad.id,
             ocupacion,
             direccion,
@@ -380,6 +378,28 @@ export const createFichaClinicaAdulto = async (req, res) => {
             institucion_id,
             is_reevaluacion: isReevaluacion
         }, { transaction: t });
+
+        // Manejar diagnósticos
+if (diagnosticos_id && diagnosticos_id.length > 0) {
+    const diagnosticosPromesas = diagnosticos_id.map(async (diagnosticoId) => {
+        await DiagnosticoFichaAdulto.create({
+            ficha_clinica_id: fichaClinica.id,
+            diagnostico_id: diagnosticoId,
+            es_diagnostico_otro: false
+        }, { transaction: t });
+    });
+    await Promise.all(diagnosticosPromesas);
+}
+
+// Manejar diagnóstico personalizado
+if (diagnostico_otro) {
+    await DiagnosticoFichaAdulto.create({
+        ficha_clinica_id: fichaClinica.id,
+        diagnostico_id: null, // Asegúrate de que el ID sea nulo
+        es_diagnostico_otro: true,
+        diagnostico_otro_texto: diagnostico_otro
+    }, { transaction: t });
+}
 
         // Manejo de tipos de familia
         if (tiposFamilia && tiposFamilia.length > 0) {
@@ -398,11 +418,7 @@ export const createFichaClinicaAdulto = async (req, res) => {
         res.status(201).json({
             success: true,
             message: 'Ficha clínica creada exitosamente',
-            data: {
-                fichaClinica,
-                paciente,
-                requestData: req.body
-            }
+            data: fichaClinica
         });
 
     } catch (error) {
@@ -746,9 +762,13 @@ export const getFichaClinica = async (req, res) => {
                         attributes: ['id', 'nombres', 'apellidos', 'rut', 'edad', 'telefono_principal', 'telefono_secundario']
                     },
                     {
-                        model: Diagnostico,
-                        as: 'diagnostico',
-                        attributes: ['id', 'nombre'],
+                        model: DiagnosticoFichaAdulto,
+                        as: 'DiagnosticoFichas',
+                        include: [{
+                            model: Diagnostico,
+                            as: 'Diagnostico',
+                            attributes: ['id', 'nombre']
+                        }]
                     },
                     {
                         model: CicloVitalFamiliar,
@@ -904,6 +924,17 @@ function formatearFichaAdulto(fichaClinica) {
             tipoFamiliaOtro: null
         }];
 
+        const diagnosticos = fichaClinica.DiagnosticoFichas && fichaClinica.DiagnosticoFichas.length > 0 
+            ? fichaClinica.DiagnosticoFichas.map(diagnosticoFicha => ({
+                id: diagnosticoFicha.es_diagnostico_otro 
+                    ? null 
+                    : diagnosticoFicha.diagnostico_id,
+                nombre: diagnosticoFicha.es_diagnostico_otro 
+                    ? diagnosticoFicha.diagnostico_otro_texto 
+                    : diagnosticoFicha.Diagnostico.nombre,
+                esOtro: diagnosticoFicha.es_diagnostico_otro
+            })) : [];
+
     return {
         id: fichaClinica.id,
         fecha: fichaClinica.fecha_evaluacion,
@@ -916,11 +947,7 @@ function formatearFichaAdulto(fichaClinica) {
             telefonoPrincipal: fichaClinica.PacienteAdulto.telefono_principal,
             telefonoSecundario: fichaClinica.PacienteAdulto.telefono_secundario
         },
-        diagnostico: {
-            id: fichaClinica.diagnostico_id,
-            nombre: fichaClinica.diagnostico && fichaClinica.diagnostico.nombre ? fichaClinica.diagnostico.nombre : fichaClinica.nombre,
-            diagnosticoOtro: fichaClinica.diagnostico_otro || null
-        },
+        diagnosticos,
         escolaridad: {
             id: fichaClinica.NivelEscolaridad?.id,
             nivel: fichaClinica.NivelEscolaridad?.nivel
@@ -1068,6 +1095,8 @@ export const obtenerFichasClinicas = async (req, res) => {
             institucion, 
             textoBusqueda, 
             tipoFicha, 
+            fechaInicial,
+            fechaFinal,
             pagina = 1, 
             limite = 10
         } = req.query;
@@ -1088,12 +1117,25 @@ export const obtenerFichasClinicas = async (req, res) => {
             modelos = [{ modelo: FichaClinicaInfantil, pacienteModelo: PacienteInfantil }];
         }
 
-        // Filtro por institución (si se proporciona)
         if (institucion) {
             whereConditions.institucion_id = parseInt(institucion);
         }
 
-        // Búsqueda de texto flexible
+        // Agregar condiciones de fecha
+        if (fechaInicial || fechaFinal) {
+            const condicionesFecha = {};
+            
+            if (fechaInicial) {
+                condicionesFecha[Op.gte] = new Date(fechaInicial);
+            }
+            
+            if (fechaFinal) {
+                condicionesFecha[Op.lte] = new Date(fechaFinal);
+            }
+            
+            whereConditions.createdAt = condicionesFecha;
+        }
+
         const textConditions = textoBusqueda 
             ? {
                 [Op.or]: [
@@ -1116,101 +1158,96 @@ export const obtenerFichasClinicas = async (req, res) => {
             }
             : {};
 
-        // Realizar consulta con múltiples modelos
         const resultados = await Promise.all(
             modelos.map(async ({ modelo, pacienteModelo }) => {
                 const includeConfig = [
                     {
                         model: pacienteModelo,
-                        where: {
-                            ...textConditions
-                        },
+                        where: textConditions,
                         required: true
                     },
                     {
                         model: Institucion,
-                        include: [TipoInstitucion],
-                        where: tipoInstitucion 
-                            ? { tipo_id: parseInt(tipoInstitucion) } 
-                            : {}
+                        include: [{
+                            model: TipoInstitucion,
+                            required: false
+                        }],
+                        where: tipoInstitucion ? { tipo_id: parseInt(tipoInstitucion) } : {},
+                        required: true
                     }
                 ];
 
-                // Agregar Diagnóstico solo para FichaClinicaAdulto
                 if (modelo === FichaClinicaAdulto) {
                     includeConfig.push({
-                        model: Diagnostico,
-                        attributes: ['id', 'nombre'],
-                        as: 'diagnostico',
+                        model: DiagnosticoFichaAdulto,
+                        as: 'DiagnosticoFichas',
+                        include: [{
+                            model: Diagnostico,
+                            as: 'Diagnostico',
+                            attributes: ['id', 'nombre'],
+                            required: false
+                        }],
                         required: false
                     });
                 }
 
-                // Obtener todas las fichas, incluyendo reevaluaciones
                 const fichas = await modelo.findAll({
                     where: whereConditions,
                     include: includeConfig,
                     order: [['createdAt', 'DESC']]
                 });
 
-                // Agrupar por paciente_id y mantener la ficha más reciente de cada tipo (original o reevaluación)
                 const fichasPorPaciente = {};
                 const reevaluacionesPorPaciente = {};
 
                 fichas.forEach(ficha => {
                     const pacienteId = ficha.paciente_id;
                     
-                    // Contar reevaluaciones
                     if (ficha.is_reevaluacion) {
-                        if (!reevaluacionesPorPaciente[pacienteId]) {
-                            reevaluacionesPorPaciente[pacienteId] = 1;
-                        } else {
-                            reevaluacionesPorPaciente[pacienteId]++;
-                        }
+                        reevaluacionesPorPaciente[pacienteId] = 
+                            (reevaluacionesPorPaciente[pacienteId] || 0) + 1;
                     }
 
-                    if (!fichasPorPaciente[pacienteId]) {
+                    if (!fichasPorPaciente[pacienteId] || 
+                        new Date(ficha.createdAt) > new Date(fichasPorPaciente[pacienteId].createdAt)) {
                         fichasPorPaciente[pacienteId] = ficha;
-                    } else {
-                        // Mantener la ficha más reciente
-                        const fechaExistente = new Date(fichasPorPaciente[pacienteId].createdAt);
-                        const fechaActual = new Date(ficha.createdAt);
-                        
-                        if (fechaActual > fechaExistente) {
-                            fichasPorPaciente[pacienteId] = ficha;
-                        }
                     }
                 });
 
-                // Añadir número de reevaluaciones a cada ficha
-                const fichasConReevaluaciones = Object.values(fichasPorPaciente).map(ficha => {
-                    const pacienteId = ficha.paciente_id;
-                    ficha.dataValues.reevaluaciones = reevaluacionesPorPaciente[pacienteId] || 0;
-                    return ficha;
-                });
+                return Object.values(fichasPorPaciente).map(ficha => {
+                    const fichaFormateada = { 
+                        ...ficha.get({ plain: true }),
+                        reevaluaciones: reevaluacionesPorPaciente[ficha.paciente_id] || 0
+                    };
 
-                return fichasConReevaluaciones;
+                    if (modelo === FichaClinicaAdulto && ficha.DiagnosticoFichas) {
+                        fichaFormateada.diagnosticos = (ficha.DiagnosticoFichas || []).map(diagnosticoFicha => ({
+                            id : diagnosticoFicha.es_diagnostico_otro ? null : diagnosticoFicha.diagnostico_id,
+                            nombre: diagnosticoFicha.es_diagnostico_otro 
+                                ? diagnosticoFicha.diagnostico_otro_texto 
+                                : (diagnosticoFicha.Diagnostico?.nombre || 'No especificado'),
+                            esOtro: diagnosticoFicha.es_diagnostico_otro
+                        }));
+                    }
+
+                    return fichaFormateada;
+                });
             })
         );
 
-        // Combinar resultados
-        const fichas = resultados.flat();
+        const fichasCombinadas = resultados.flat().sort((a, b) => 
+            new Date(b.createdAt) - new Date(a.createdAt)
+        );
 
-        // Ordenar las fichas combinadas por createdAt
-        const fichasOrdenadas = fichas.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-
-        // Configurar paginación
         const offset = (parseInt(pagina) - 1) * parseInt(limite);
-        
-        // Aplicar paginación a las fichas ordenadas
-        const paginadas = fichasOrdenadas.slice(offset, offset + limite);
+        const fichasPaginadas = fichasCombinadas.slice(offset, offset + parseInt(limite));
 
         res.json({
             success: true,
-            total: fichas.length,
+            total: fichasCombinadas.length,
             pagina: parseInt(pagina),
             limite: parseInt(limite),
-            fichas: paginadas
+            fichas: fichasPaginadas
         });
 
     } catch (error) {
@@ -1221,6 +1258,197 @@ export const obtenerFichasClinicas = async (req, res) => {
             error: error.message 
         });
     }
+};
+
+export const exportarFichasClinicas = async (req, res) => {
+    try {
+        const { 
+            tipoInstitucion, 
+            institucion, 
+            textoBusqueda, 
+            tipoFicha, 
+            fechaInicial,
+            fechaFinal,
+            pagina = 1, 
+            limite = 10000  // Establecer un límite alto para obtener todos los registros
+        } = req.query;
+
+        // Si no se especifica tipo de ficha, exportar ambos
+        const tipoFichaFinal = tipoFicha || '';
+
+        // Aquí puedes reutilizar la lógica de obtenerFichasClinicas
+        const params = {
+            tipoInstitucion, 
+            institucion, 
+            textoBusqueda, 
+            tipoFicha: tipoFichaFinal,
+            fechaInicial,
+            fechaFinal,
+            pagina, 
+            limite
+        };
+
+        // Simular la llamada a obtenerFichasClinicas
+        const fichas = await new Promise((resolve, reject) => {
+            const mockRes = {
+                json: (data) => resolve(data),
+                status: (code) => ({
+                    json: (errorData) => reject(new Error(errorData.message))
+                })
+            };
+
+            obtenerFichasClinicas({ query: params }, mockRes);
+        });
+
+        // Transformar los datos para exportación
+        const datosExportacion = await Promise.all(fichas.fichas.map(async ficha => {
+            const esInfantil = ficha.PacienteInfantil !== undefined;
+            const paciente = esInfantil ? ficha.PacienteInfantil : ficha.PacienteAdulto;
+
+            // Obtener la primera ficha clínica (is_reevaluacion = 0)
+            const primeraFicha = await (esInfantil ? FichaClinicaInfantil : FichaClinicaAdulto).findOne({
+                where: {
+                    paciente_id: paciente.id,
+                    is_reevaluacion: 0
+                },
+                order: [['createdAt', 'ASC']]
+            });
+
+            // Obtener la última ficha clínica (is_reevaluacion = 1)
+            const ultimaFicha = await (esInfantil ? FichaClinicaInfantil : FichaClinicaAdulto).findOne({
+                where: {
+                    paciente_id: paciente.id,
+                    is_reevaluacion: 1
+                },
+                order: [['createdAt', 'DESC']]
+            });
+
+            const resultado = {
+                tipo: esInfantil ? 'Infantil' : 'Adulto',
+                rut: paciente.rut,
+                nombres: paciente.nombres,
+                apellidos: paciente.apellidos,
+                institucion: ficha.Institucion.nombre,
+                tipoInstitucion: ficha.Institucion.TipoInstitucion?.nombre || 'No especificado',
+                fechaInicial: primeraFicha ? new Date(primeraFicha.createdAt).toLocaleDateString() : 'No registrada',
+                fechaFinal: ultimaFicha ? new Date(ultimaFicha.createdAt).toLocaleDateString() : 'No registrada',
+                reevaluaciones: ficha.reevaluaciones
+            };
+
+            if (esInfantil) {
+                resultado.diagnosticoDSMInicial = primeraFicha ? primeraFicha.diagnostico_dsm : 'No registrado';
+                resultado.diagnosticoDSMFinal = ultimaFicha ? ultimaFicha.diagnostico_dsm : 'No registrado';
+
+                // Comparar diagnósticos
+                resultado.estadoDiagnostico = compararDiagnosticos(resultado.diagnosticoDSMInicial, resultado.diagnosticoDSMFinal);
+            } else {
+                resultado.valorHbA1cInicial = primeraFicha ? primeraFicha.valor_hbac1 : 'No registrado';
+                resultado.valorHbA1cFinal = ultimaFicha ? ultimaFicha.valor_hbac1 : 'No registrado';
+
+                // Comparar valores HbA1c
+                resultado.estadoHbA1c = compararHbA1c(resultado.valorHbA1cInicial, resultado.valorHbA1cFinal);
+            }
+
+            return resultado;
+        }));
+
+        // Definir columnas dinámicamente
+        const columnasBase = [
+            { header: 'Tipo', key: 'tipo' },
+            { header: 'RUT', key: 'rut' },
+            { header: 'Nombres', key: 'nombres' },
+            { header: 'Apellidos', key: 'apellidos' },
+            { header: 'Institución', key: 'institucion' },
+            { header: 'Tipo Institución', key: 'tipoInstitucion' },
+            { header: 'Fecha Inicial', key: 'fechaInicial' },
+            { header: 'Fecha Final', key: 'fechaFinal' },
+            { header: 'Reevaluaciones', key: 'reevaluaciones' }
+        ];
+
+        // Agregar columnas específicas según el tipo de ficha o si se exportan ambos
+        const columnasExtras = tipoFichaFinal === 'infantil'
+            ? [
+                { header: 'Diagnóstico DSM Inicial', key: 'diagnosticoDSMInicial' },
+                { header: 'Diagnóstico DSM Final', key: 'diagnosticoDSMFinal' },
+                { header: 'Estado Diagnóstico', key: 'estadoDiagnostico' }
+            ]
+            : tipoFichaFinal === 'adulto'
+            ? [
+                { header: 'Valor HbA1c Inicial', key: 'valorHbA1cInicial' },
+                { header: 'Valor HbA1c Final', key: 'valorHbA1cFinal' },
+                { header: 'Estado HbA1c', key: 'estadoHbA1c' }
+            ]
+            : [
+                // Si no hay tipo específico, incluir columnas de ambos
+                { header: 'Diagnóstico DSM Inicial', key: 'diagnosticoDSMInicial' },
+                { header: 'Diagnóstico DSM Final', key: 'diagnosticoDSMFinal' },
+                { header: 'Estado Diagnóstico', key: 'estadoDiagnostico' },
+                { header: 'Valor HbA1c Inicial', key: 'valorHbA1cInicial' },
+                { header: 'Valor HbA1c Final', key: 'valorHbA1cFinal' },
+                { header: 'Estado HbA1c', key: 'estadoHbA1c' }
+            ];
+
+        // Crear el archivo Excel
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Fichas Clínicas');
+
+        // Definir columnas
+        worksheet.columns = [...columnasBase, ...columnasExtras];
+
+        // Agregar datos
+        worksheet.addRows(datosExportacion);
+
+        // Ajustar automáticamente el ancho de las columnas
+        worksheet.columns.forEach(column => {
+            let maxLength = 0;
+            column.eachCell({ includeEmpty: true }, (cell) => {
+                if (cell.value) {
+                    maxLength = Math.max(maxLength, cell.value.toString().length);
+                }
+            });
+            column.width = maxLength + 2; // +2 para un poco de espacio extra
+        });
+
+        // Generar y enviar el archivo Excel
+        const buffer = await workbook.xlsx.writeBuffer();
+
+        res.setHeader('Content-Disposition', `attachment; filename=fichas_clinicas_${new Date().toISOString().split('T')[0]}.xlsx`);
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.send(buffer);
+
+    } catch (error) {
+        console.error('Error al exportar fichas clínicas:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Error al exportar las fichas clínicas', 
+            error: error.message 
+        });
+    }
+};
+
+// Función para comparar diagnósticos infantiles
+const compararDiagnosticos = (inicial, final) => {
+    const estados = ['Retraso', 'Riesgo', 'Normal'];
+    const indiceInicial = estados.indexOf(inicial);
+    const indiceFinal = estados.indexOf(final);
+
+    if (indiceInicial === -1 || indiceFinal === -1) return 'No registrado';
+
+    if (indiceFinal > indiceInicial) return 'Mejoró';
+    if (indiceFinal === indiceInicial) return 'Se mantuvo';
+    return 'Empeoró';
+};
+
+// Función para comparar valores HbA1c
+const compararHbA1c = (inicial, final) => {
+    if (inicial === 'No registrado' || final === 'No registrado') return 'No registrado';
+
+    const valorInicial = parseFloat(inicial);
+    const valorFinal = parseFloat(final);
+
+    if (valorFinal < valorInicial) return 'Mejoró';
+    if (valorFinal === valorInicial) return 'Se mantuvo';
+    return 'Empeoró';
 };
 
 export const getReevaluaciones = async (req, res) => {
@@ -1291,9 +1519,13 @@ export const getReevaluaciones = async (req, res) => {
                         attributes: ['id', 'nombres', 'apellidos', 'rut', 'edad', 'telefono_principal', 'telefono_secundario']
                     },
                     {
-                        model: Diagnostico,
-                        as: 'diagnostico',
-                        attributes: ['id', 'nombre'],
+                        model: DiagnosticoFichaAdulto,
+                        as: 'DiagnosticoFichas', // Añade este alias
+                        include: [{
+                            model: Diagnostico,
+                            as: 'Diagnostico', // Y este también
+                            attributes: ['id', 'nombre']
+                        }]
                     },
                     {
                         model: NivelEscolaridad,
@@ -1444,12 +1676,14 @@ function formatearReevaluacionAdulto(reevaluacion) {
             telefonoPrincipal: reevaluacion.PacienteAdulto.telefono_principal,
             telefonoSecundario: reevaluacion.PacienteAdulto.telefono_secundario
         },
-        diagnostico: {
-            id: reevaluacion.diagnostico_id,
-            nombre: reevaluacion.diagnostico && reevaluacion.diagnostico.nombre 
-                ? reevaluacion.diagnostico.nombre 
-                : reevaluacion.diagnostico_otro,
-        },
+        diagnosticos: Array.isArray(reevaluacion.DiagnosticoFichas) ? 
+            reevaluacion.DiagnosticoFichas.map(diagnosticoFicha => ({
+                id: diagnosticoFicha.Diagnostico?.id || null, // Asegúrate de que Diagnostico existe
+                nombre: diagnosticoFicha.es_diagnostico_otro 
+                    ? diagnosticoFicha.diagnostico_otro_texto 
+                    : diagnosticoFicha.Diagnostico?.nombre || 'N/A', // Asegúrate de que Diagnostico existe
+                esOtro: diagnosticoFicha.es_diagnostico_otro
+            })) : [],
         escolaridad: {
             id: reevaluacion.NivelEscolaridad?.id,
             nivel: reevaluacion.NivelEscolaridad?.nivel
@@ -1603,7 +1837,7 @@ function formatearReevaluacionInfantil(reevaluacion) {
                 apellidos,
                 rut,
                 edad,
-                diagnostico_id,
+                diagnosticos_id,
                 diagnostico_otro,
                 escolaridad,
                 ocupacion,
@@ -1637,22 +1871,11 @@ function formatearReevaluacionInfantil(reevaluacion) {
                 });
             }
     
-            // Validación de diagnóstico
-            if (!diagnostico_id && !diagnostico_otro) {
-                await t.rollback();
+            if (!diagnosticos_id || (diagnosticos_id.length === 0 && !diagnostico_otro)) {
                 return res.status(400).json({
                     success: false,
-                    message: 'Debe proporcionar un diagnóstico (predefinido o personalizado)'
+                    message: 'Debe proporcionar al menos un diagnóstico (predefinido o personalizado)'
                 });
-            }
-    
-            // Validar diagnóstico si se proporciona un ID
-            if (diagnostico_id) {
-                const diagnosticoExistente = await Diagnostico.findByPk(diagnostico_id, { transaction: t });
-                if (!diagnosticoExistente) {
-                    await t.rollback();
-                    throw new Error('Diagnóstico seleccionado no válido');
-                }
             }
     
             // Actualizar paciente
@@ -1677,8 +1900,6 @@ function formatearReevaluacionInfantil(reevaluacion) {
     
             // Actualizar ficha clínica
             const [updatedFichaClinica] = await FichaClinicaAdulto.update({
-                diagnostico_id: diagnostico_id || null,
-                diagnostico_otro: diagnostico_otro || null,
                 escolaridad_id: nivelEscolaridad.id,
                 ocupacion,
                 direccion,
@@ -1697,9 +1918,36 @@ function formatearReevaluacionInfantil(reevaluacion) {
                 where: { id },
                 transaction: t 
             });
+
+            // Eliminar diagnósticos existentes
+await DiagnosticoFichaAdulto.destroy({
+    where: { ficha_clinica_id: id },
+    transaction: t
+});
+
+// Agregar nuevos diagnósticos
+if (diagnosticos_id && diagnosticos_id.length > 0) {
+    const diagnosticosPromesas = diagnosticos_id.map(async (diagnosticoId) => {
+        await DiagnosticoFichaAdulto.create({
+            ficha_clinica_id: id,
+            diagnostico_id: diagnosticoId,
+            es_diagnostico_otro: false
+        }, { transaction: t });
+    });
+    await Promise.all(diagnosticosPromesas);
+}
+
+// Agregar diagnóstico personalizado si existe
+if (diagnostico_otro) {
+    await DiagnosticoFichaAdulto.create({
+        ficha_clinica_id: id,
+        diagnostico_id: null,
+        es_diagnostico_otro: true,
+        diagnostico_otro_texto: diagnostico_otro
+    }, { transaction: t });
+}
     
             // Manejar tipos de familia
-            // Primero, eliminar los tipos de familia existentes
             await FichaTipoFamilia.destroy({
                 where: { 
                     ficha_clinica_id: id,
@@ -1725,34 +1973,22 @@ function formatearReevaluacionInfantil(reevaluacion) {
             }
     
             await t.commit();
-    
-            // Recuperar la ficha clínica actualizada para devolverla
-            const fichaClinicaActualizada = await FichaClinicaAdulto.findByPk(id, { 
-                include: [
-                    { model: PacienteAdulto },
-                    { model: Diagnostico, as: 'diagnostico' }
-                ] 
-            });
-    
+
             res.status(200).json({
-                success: true,
-                message: 'Ficha clínica actualizada exitosamente',
-                data: {
-                    fichaClinica: fichaClinicaActualizada,
-                    requestData: req.body
-                }
+            success: true,
+            message: 'Ficha clínica actualizada exitosamente'
             });
-    
-        } catch (error) {
-            await t.rollback();
-            console.error('Error al actualizar ficha clínica:', error);
-            res.status(500).json({
+
+            } catch (error) {
+                await t.rollback();
+                console.error('Error al actualizar ficha clínica:', error);
+                res.status(500).json({
                 success: false,
                 message: 'Error al actualizar la ficha clínica',
                 error: error.message
-            });
-        }
-    };
+                });
+            }
+        };
 
     export const updateFichaClinicaInfantil = async (req, res) => {
         const t = await sequelize.transaction();
@@ -1949,7 +2185,7 @@ function formatearReevaluacionInfantil(reevaluacion) {
                 apellidos,
                 rut,
                 edad,
-                diagnostico_id,
+                diagnosticos_id,
                 diagnostico_otro,
                 escolaridad,
                 ocupacion,
@@ -1973,7 +2209,7 @@ function formatearReevaluacionInfantil(reevaluacion) {
             } = req.body;
     
             console.log(req.body);
-
+    
             // Validar el tipo de reevaluación
             if (!tipo || (tipo !== 'adulto' && tipo !== 'infantil')) {
                 return res.status(400).json({ 
@@ -1998,7 +2234,6 @@ function formatearReevaluacionInfantil(reevaluacion) {
             });
     
             if (!reevaluacion) {
-                await t.rollback();
                 return res.status(404).json({ 
                     success: false, 
                     message: 'Reevaluación no encontrada' 
@@ -2014,9 +2249,6 @@ function formatearReevaluacionInfantil(reevaluacion) {
             // Preparar datos específicos para cada tipo de ficha
             const datosEspecificos = tipo === 'adulto' 
                 ? {
-                    // Si hay diagnostico_otro, establecer diagnostico_id como null
-                    diagnostico_id: diagnostico_otro ? null : (diagnostico_id || null),
-                    diagnostico_otro: diagnostico_otro || null,
                     escolaridad_id: escolaridad,
                     ocupacion,
                     direccion,
@@ -2041,6 +2273,39 @@ function formatearReevaluacionInfantil(reevaluacion) {
                 }, 
                 { transaction: t }
             );
+    
+            // Manejar diagnósticos para adultos
+            if (tipo === 'adulto') {
+                // Eliminar diagnósticos existentes
+                await DiagnosticoFichaAdulto.destroy({
+                    where: { ficha_clinica_id: id },
+                    transaction: t
+                });
+
+                // Agregar nuevos diagnósticos
+                if (diagnosticos_id && diagnosticos_id.length > 0) {
+                    const diagnosticosPromesas = diagnosticos_id.map(async (diagnosticoId) => {
+                        await DiagnosticoFichaAdulto.create({
+                            ficha_clinica_id: id,
+                            diagnostico_id: diagnosticoId,
+                            es_diagnostico_otro: false, // Para diagnósticos estándar
+                            diagnostico_otro_texto: null // No aplica para diagnósticos estándar
+                        }, { transaction: t });
+                    });
+
+                    await Promise.all(diagnosticosPromesas);
+                }
+
+                // Manejar el diagnóstico alternativo
+                if (diagnostico_otro && diagnostico_otro.trim() !== '') {
+                    await DiagnosticoFichaAdulto.create({
+                        ficha_clinica_id: id,
+                        diagnostico_id: null, // No hay ID de diagnóstico estándar
+                        es_diagnostico_otro: true, // Es un diagnóstico alternativo
+                        diagnostico_otro_texto: diagnostico_otro // Texto del diagnóstico alternativo
+                    }, { transaction: t });
+                }
+            }
     
             // Actualizar datos del paciente
             const ModeloPaciente = tipo === 'adulto' ? PacienteAdulto : PacienteInfantil;
@@ -2074,7 +2339,6 @@ function formatearReevaluacionInfantil(reevaluacion) {
     
             if (tiposFamilia && tiposFamilia.length > 0) {
                 const tipoFamiliaPromesas = tiposFamilia.map(async (tipoId) => {
-                    // Si no hay tipos de familia o es 'Otras', establecer tipo_familia_id como null
                     await FichaTipoFamilia.create({
                         ficha_clinica_id: id,
                         tipo_familia_id: tipoId !== 'Otras' ? tipoId : null,
@@ -2085,7 +2349,6 @@ function formatearReevaluacionInfantil(reevaluacion) {
     
                 await Promise.all(tipoFamiliaPromesas);
             } else if (tipoFamiliaOtro) {
-                // Si no hay tipos de familia pero hay un tipo de familia otro
                 await FichaTipoFamilia.create({
                     ficha_clinica_id: id,
                     tipo_familia_id: null,
@@ -2096,7 +2359,6 @@ function formatearReevaluacionInfantil(reevaluacion) {
     
             // Manejar factores de riesgo para infantil
             if (tipo === 'infantil') {
-                // Factores de riesgo del niño
                 await FichaFactorRiesgoNino.destroy({ 
                     where: { ficha_clinica_id: id }, 
                     transaction: t 
@@ -2143,24 +2405,31 @@ function formatearReevaluacionInfantil(reevaluacion) {
             }
     
             await t.commit();
-
+    
             // Recuperar la reevaluación actualizada
             const reevaluacionActualizada = await ModeloFicha.findByPk(id, {
                 include: [
                     tipo === 'adulto' 
                         ? { model: PacienteAdulto, as: 'PacienteAdulto' }
-                        : { model: PacienteInfantil, as: 'PacienteInfantil' }
+                        : { model: PacienteInfantil, as: 'PacienteInfantil' },
+                    ...(tipo === 'adulto' ? [{
+                        model: DiagnosticoFichaAdulto,
+                        as: 'DiagnosticoFichas',
+                        include: [{ 
+                            model: Diagnostico,
+                            as: 'Diagnostico'  // Agregar el alias aquí
+                        }]
+                    }] : [])
                 ]
             });
-
+    
             res.json({ 
                 success: true, 
                 message: 'Reevaluación actualizada exitosamente',
                 data: reevaluacionActualizada 
             });
-
+    
         } catch (error) {
-            await t.rollback();
             console.error('Error al actualizar la reevaluación:', error);
             res.status(500).json({ 
                 success: false, 

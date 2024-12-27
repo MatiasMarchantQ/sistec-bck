@@ -11,10 +11,14 @@ import {
     updateFichaClinicaInfantil, // Actualización de ficha clínica infantil
     getReevaluaciones, 
     updateReevaluacion, // Actualización de reevaluación
-    updateReevaluacionInfantil
+    updateReevaluacionInfantil,
+    exportarFichasClinicas
 } from '../controllers/fichaClinicaController.js';
 
 const router = Router();
+
+router.get('/exportar', exportarFichasClinicas); // Ruta para exportar fichas clínicas
+
 
 // Rutas para obtener fichas clínicas
 router.get('/', verifyToken, obtenerFichasClinicas);
