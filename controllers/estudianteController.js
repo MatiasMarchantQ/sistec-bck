@@ -43,11 +43,11 @@ export const enviarCredencialesMasivo = async (req, res) => {
 
     // Procesar en lotes
     const procesarLote = async (lote) => {
-      const promesas = lote.map(estudiante => 
+      const promesas = lote.map(estudiante =>
         limit(async () => {
           try {
             // Generar contraseña temporal si no tiene
-            const contrasenatemporal = estudiante.contrasena || 
+            const contrasenatemporal = estudiante.contrasena ||
               generarContrasenaTemporalSegura();
 
             // Enviar credenciales
@@ -78,9 +78,9 @@ export const enviarCredencialesMasivo = async (req, res) => {
     const TAMAÑO_LOTE = 10;
     for (let i = 0; i < estudiantes.length; i += TAMAÑO_LOTE) {
       const lote = estudiantes.slice(i, i + TAMAÑO_LOTE);
-      
+
       await procesarLote(lote);
-      
+
       // Pequeña pausa entre lotes para evitar sobrecargar el servidor de correo
       await new Promise(resolve => setTimeout(resolve, INTERVALO_ENTRE_LOTES));
     }
@@ -96,28 +96,28 @@ const generarContrasenaTemporalSegura = (longitudMinima = 12, longitudMaxima = 1
   const caracteresMinusculas = 'abcdefghijklmnopqrstuvwxyz';
   const caracteresNumeros = '0123456789';
   const caracteresEspeciales = '!@#$%^&*()';
-  
+
   // Asegurarse de que la longitud esté dentro de los límites
   const longitudContrasena = Math.floor(Math.random() * (longitudMaxima - longitudMinima + 1)) + longitudMinima;
-  
+
   let contrasena = '';
-  
+
   // Asegurarse de incluir al menos un carácter de cada tipo
   contrasena += caracteresMayusculas[Math.floor(Math.random() * caracteresMayusculas.length)];
   contrasena += caracteresMinusculas[Math.floor(Math.random() * caracteresMinusculas.length)];
   contrasena += caracteresNumeros[Math.floor(Math.random() * caracteresNumeros.length)];
   contrasena += caracteresEspeciales[Math.floor(Math.random() * caracteresEspeciales.length)];
-  
+
   // Rellenar el resto de la contraseña con caracteres aleatorios
   const todosLosCaracteres = caracteresMayusculas + caracteresMinusculas + caracteresNumeros + caracteresEspeciales;
   for (let i = contrasena.length; i < longitudContrasena; i++) {
     const indiceAleatorio = Math.floor(Math.random() * todosLosCaracteres.length);
     contrasena += todosLosCaracteres[indiceAleatorio];
   }
-  
+
   // Mezclar la contraseña para que los caracteres no estén en un orden predecible
   contrasena = contrasena.split('').sort(() => Math.random() - 0.5).join('');
-  
+
   return contrasena;
 };
 
@@ -127,7 +127,7 @@ export const cambiarContrasenaEstudiante = async (req, res) => {
     const { nuevaContrasena } = req.body;
 
     // Validación de la nueva contraseña
-    const regexContrasena = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,20}$/; 
+    const regexContrasena = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,20}$/;
     if (!regexContrasena.test(nuevaContrasena)) {
       return res.status(400).json({ error: 'La nueva contraseña debe contener al menos una letra mayúscula, una letra minúscula, un número y tener entre 8 y 20 caracteres.' });
     }
@@ -146,9 +146,9 @@ export const cambiarContrasenaEstudiante = async (req, res) => {
     // Enviar correo de notificación con la nueva contraseña
     // await enviarCredencialesEstudiante(estudiante, nuevaContrasena);
 
-    res.status(200).json({ 
+    res.status(200).json({
       mensaje: 'Contraseña cambiada exitosamente',
-      correo: estudiante.correo 
+      correo: estudiante.correo
     });
   } catch (error) {
     console.error('Error al cambiar contraseña:', error);
@@ -174,14 +174,14 @@ export const enviarCredencialIndividual = async (req, res) => {
     }
 
     let contrasenaEnviar;
-    
+
     // Verificar si la contraseña actual está en texto plano o hasheada
     const esContrasenaHasheada = /^\$2[aby]\$\d{2}\$/.test(estudiante.contrasena);
 
     if (esContrasenaHasheada) {
       // Si está hasheada, generar contraseña temporal
       contrasenaEnviar = generarContrasenaTemporalSegura();
-      
+
       // Actualizar contraseña del estudiante
       await estudiante.update({
         contrasena: contrasenaEnviar,
@@ -190,7 +190,7 @@ export const enviarCredencialIndividual = async (req, res) => {
     } else {
       // Si está en texto plano, usar la contraseña existente
       contrasenaEnviar = estudiante.contrasena;
-      
+
       // Actualizar estado de debe_cambiar_contrasena
       await estudiante.update({
         debe_cambiar_contrasena: false
@@ -200,7 +200,7 @@ export const enviarCredencialIndividual = async (req, res) => {
     // Enviar credenciales con la contraseña
     await enviarCredencialesEstudiante(estudiante, contrasenaEnviar);
 
-    res.status(200).json({ 
+    res.status(200).json({
       mensaje: 'Credenciales enviadas exitosamente',
       correo: estudiante.correo,
       rut: estudiante.rut,
@@ -233,8 +233,8 @@ export const cargarEstudiantes = async (req, res) => {
 
     for (const estudiante of estudiantes) {
       try {
-        // Buscar el estudiante por RUT o correo
-        let estudianteExistente = await Estudiante.findOne({
+        // Verificar si el RUT o el correo ya existen en Estudiantes o Usuarios
+        const estudianteExistente = await Estudiante.findOne({
           where: {
             [Op.or]: [
               { rut: estudiante.rut },
@@ -243,41 +243,49 @@ export const cargarEstudiantes = async (req, res) => {
           }
         });
 
-        if (estudianteExistente) {
+        const usuarioExistente = await Usuario.findOne({
+          where: {
+            [Op.or]: [
+              { rut: estudiante.rut },
+              { correo: estudiante.correo }
+            ]
+          }
+        });
+
+        if (estudianteExistente || usuarioExistente) {
           // Lógica de actualización existente...
-          const anosActuales = estudianteExistente.anos_cursados.split(',');
+          const anosActuales = estudianteExistente ? estudianteExistente.anos_cursados.split(',') : [];
           const nuevoAno = estudiante.anos_cursados;
 
-          if (!anosActuales.includes(nuevoAno)) {
-            anosActuales.push(nuevoAno);
-            await estudianteExistente.update({
-              nombres: estudiante.nombres,
-              apellidos: estudiante.apellidos,
-              correo: estudiante.correo,
-              anos_cursados: anosActuales.join(','),
-              contador_registros: estudianteExistente.contador_registros + 1
-            });
-            estudiantesActualizados++;
-            resultados.push({
+          if (estudianteExistente) {
+            if (!anosActuales.includes(nuevoAno)) {
+              anosActuales.push(nuevoAno);
+              await estudianteExistente.update({
+                nombres: estudiante.nombres,
+                apellidos: estudiante.apellidos,
+                correo: estudiante.correo,
+                anos_cursados: anosActuales.join(','),
+                contador_registros: estudianteExistente.contador_registros + 1
+              });
+              estudiantesActualizados++;
+            } else {
+              await estudianteExistente.update({
+                nombres: estudiante.nombres,
+                apellidos: estudiante.apellidos,
+                correo: estudiante.correo
+              });
+            }
+          } else if (usuarioExistente) {
+            errores.push({
               rut: estudiante.rut,
-              mensaje: `Estudiante actualizado con nuevo año: ${nuevoAno}`
-            });
-          } else {
-            await estudianteExistente.update({
-              nombres: estudiante.nombres,
-              apellidos: estudiante.apellidos,
-              correo: estudiante.correo
-            });
-            resultados.push({
-              rut: estudiante.rut,
-              mensaje: `Estudiante existente actualizado, año ${nuevoAno} ya registrado`
+              error: `No se puede crear el estudiante. El RUT o correo ya están registrados como usuario.`
             });
           }
         } else {
           ultimoId++;
-          
+
           // Crear nuevo estudiante con ID específico
-          const nuevoEstudiante = await Estudiante.create({
+          await Estudiante.create({
             id: ultimoId, // Especificamos el ID
             nombres: estudiante.nombres,
             apellidos: estudiante.apellidos,
@@ -291,10 +299,6 @@ export const cargarEstudiantes = async (req, res) => {
             rol_id: 3
           });
           nuevosEstudiantes++;
-          resultados.push({
-            rut: estudiante.rut,
-            mensaje: `Estudiante creado exitosamente con ID: ${ultimoId}`
-          });
         }
       } catch (error) {
         console.error('Error al procesar estudiante:', error);
@@ -305,9 +309,21 @@ export const cargarEstudiantes = async (req, res) => {
       }
     }
 
+    // Resumen de resultados
+    const resumenResultados = [];
+    if (nuevosEstudiantes > 0) {
+      resumenResultados.push(`Se crearon ${nuevosEstudiantes} nuevo(s) estudiante(s).`);
+    }
+    if (estudiantesActualizados > 0) {
+      resumenResultados.push(`Se actualizaron ${estudiantesActualizados} estudiante(s).`);
+    }
+    if (errores.length > 0) {
+      resumenResultados.push(`Se encontraron ${errores.length} error(es) al procesar estudiantes.`);
+    }
+
     res.status(200).json({
       mensaje: 'Proceso de carga masiva completado',
-      resultados,
+      resumen: resumenResultados.join(' '),
       errores,
       total_procesados: estudiantes.length,
       nuevos_estudiantes: nuevosEstudiantes,
@@ -336,13 +352,13 @@ export const actualizarEstudiantesMasivo = async (req, res) => {
         }
       }
     });
-    
+
     // Si no encontramos la misma cantidad de estudiantes que IDs enviados
     if (estudiantes.length !== id.length) {
-      const estudiantesNoEncontrados = id.filter(idEstudiante => 
+      const estudiantesNoEncontrados = id.filter(idEstudiante =>
         !estudiantes.some(e => e.id === idEstudiante)
       );
-      
+
       return res.status(404).json({
         error: 'Uno o más estudiantes no fueron encontrados',
         estudiantesNoEncontrados: estudiantesNoEncontrados
@@ -350,24 +366,64 @@ export const actualizarEstudiantesMasivo = async (req, res) => {
     }
 
     // Verificar si el correo ya existe en los cambios
-    for (const estudiante of estudiantes) {
-      if (cambios.correo && cambios.correo !== estudiante.correo) {
-        const correoExistente = await Estudiante.findOne({
-          where: {
-            correo: cambios.correo,
-            id: { [Op.ne]: estudiante.id } // Ignorar el estudiante que se está actualizando
-          }
-        });
-        
-        if (correoExistente) {
-          return res.status(400).json({ 
-            error: `El correo ${cambios.correo} ya está registrado en el sistema` 
+    if (cambios.correo) {
+      for (const estudiante of estudiantes) {
+        if (cambios.correo !== estudiante.correo) {
+          const correoExistenteEstudiante = await Estudiante.findOne({
+            where: {
+              correo: cambios.correo,
+              id: { [Op.ne]: estudiante.id } // Ignorar el estudiante que se está actualizando
+            }
           });
+
+          const correoExistenteUsuario = await Usuario.findOne({
+            where: {
+              correo: cambios.correo
+            }
+          });
+
+          if (correoExistenteEstudiante || correoExistenteUsuario) {
+            return res.status(400).json({
+              error: `El correo ${cambios.correo} ya está registrado en el sistema`,
+              detalles: correoExistenteEstudiante
+                ? 'Registrado como estudiante'
+                : 'Registrado como usuario'
+            });
+          }
         }
       }
     }
 
-    // Si todos existen y no hay conflictos de correo, procedemos con la actualización
+    // Verificar si el RUT ya existe en los cambios
+    if (cambios.rut) {
+      for (const estudiante of estudiantes) {
+        if (cambios.rut !== estudiante.rut) {
+          const rutExistenteEstudiante = await Estudiante.findOne({
+            where: {
+              rut: cambios.rut,
+              id: { [Op.ne]: estudiante.id } // Ignorar el estudiante que se está actualizando
+            }
+          });
+
+          const rutExistenteUsuario = await Usuario.findOne({
+            where: {
+              rut: cambios.rut
+            }
+          });
+
+          if (rutExistenteEstudiante || rutExistenteUsuario) {
+            return res.status(400).json({
+              error: `El RUT ${cambios.rut} ya está registrado en el sistema`,
+              detalles: rutExistenteEstudiante
+                ? 'Registrado como estudiante'
+                : 'Registrado como usuario'
+            });
+          }
+        }
+      }
+    }
+
+    // Si todos existen y no hay conflictos de correo o RUT, procedemos con la actualización
     const actualizaciones = await Estudiante.update(cambios, {
       where: {
         id: {
@@ -438,9 +494,9 @@ export const obtenerEstudiantes = async (req, res) => {
 
   } catch (error) {
     console.error('Error al obtener estudiantes:', error);
-    return res.status(500).json({ 
-      message: 'Error al obtener estudiantes', 
-      error: error.message 
+    return res.status(500).json({
+      message: 'Error al obtener estudiantes',
+      error: error.message
     });
   }
 };
@@ -449,18 +505,23 @@ export const crearEstudiante = async (req, res) => {
   try {
     const { nombres, apellidos, rut, correo, contrasena, anos_cursados } = req.body;
 
-    // Verificar si el RUT ya existe
-    const estudianteExistente = await Estudiante.findOne({ 
-      where: { rut } 
+    // Verificar si el RUT ya existe en Estudiantes
+    const estudianteExistente = await Estudiante.findOne({
+      where: { rut }
     });
-    
+
+    // Verificar si el RUT ya existe en Usuarios
+    const usuarioExistente = await Usuario.findOne({
+      where: { rut }
+    });
+
     // Verificar si el correo ya existe en Estudiantes o Usuarios
-    const correoExistenteEstudiante = await Estudiante.findOne({ 
-      where: { correo } 
+    const correoExistenteEstudiante = await Estudiante.findOne({
+      where: { correo }
     });
-    
-    const correoExistenteUsuario = await Usuario.findOne({ 
-      where: { correo } 
+
+    const correoExistenteUsuario = await Usuario.findOne({
+      where: { correo }
     });
 
     // Validaciones
@@ -468,11 +529,15 @@ export const crearEstudiante = async (req, res) => {
       return res.status(400).json({ error: 'El RUT ya está registrado' });
     }
 
+    if (usuarioExistente) {
+      return res.status(400).json({ error: 'El RUT ya está registrado como usuario' });
+    }
+
     if (correoExistenteEstudiante || correoExistenteUsuario) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'El correo electrónico ya está registrado en el sistema',
-        detalles: correoExistenteEstudiante 
-          ? 'Registrado como estudiante' 
+        detalles: correoExistenteEstudiante
+          ? 'Registrado como estudiante'
           : 'Registrado como usuario'
       });
     }
@@ -481,7 +546,7 @@ export const crearEstudiante = async (req, res) => {
     const ultimoEstudiante = await Estudiante.findOne({
       order: [['id', 'DESC']]
     });
-    
+
     const siguienteId = ultimoEstudiante ? ultimoEstudiante.id + 1 : 1;
 
     const nuevoEstudiante = await Estudiante.create({
@@ -493,7 +558,7 @@ export const crearEstudiante = async (req, res) => {
       contrasena,
       debe_cambiar_contrasena: true,
       estado: true,
-      contador_registros:  1,
+      contador_registros: 1,
       anos_cursados,
       rol_id: 3
     });
@@ -519,92 +584,115 @@ export const crearEstudiante = async (req, res) => {
   }
 };
 
-  export const getMe = async (req, res) => {
-    try {
-      const userId = req.user.id; // Suponiendo que el middleware de verificación establece req.user
-      let usuario = await Usuario.findByPk(userId);
-      
-      if (!usuario) {
-        usuario = await Estudiante.findByPk(userId);
-      }
-  
-      if (!usuario) {
-        return res.status(404).json({ mensaje: 'Usuario no encontrado' });
-      }
-  
-      res.json(usuario);
-    } catch (error) {
-      console.error('Error al obtener usuario:', error);
-      res.status(500).json({ error: 'Error al obtener los datos del usuario' });
+export const getMe = async (req, res) => {
+  try {
+    const userId = req.user.id; // Suponiendo que el middleware de verificación establece req.user
+    let usuario = await Usuario.findByPk(userId);
+
+    if (!usuario) {
+      usuario = await Estudiante.findByPk(userId);
     }
-  };
-  
-  export const actualizarEstudiante = async (req, res) => {
-    try {
-      const { id } = req.params;
-      const { nombres, apellidos, correo, anos_cursados, estado } = req.body;
-  
-      const estudiante = await Estudiante.findByPk(id);
-      if (!estudiante) {
-        return res.status(404).json({ error: 'Estudiante no encontrado' });
-      }
-  
-      // Si se intenta cambiar el correo, verificar que no exista en otras tablas
-      if (correo && correo !== estudiante.correo) {
-        const correoExistenteEstudiante = await Estudiante.findOne({ 
-          where: { 
-            correo, 
-            id: { [Op.ne]: id } // Excluir el estudiante actual
-          } 
-        });
-        
-        const correoExistenteUsuario = await Usuario.findOne({ 
-          where: { correo } 
-        });
-  
-        if (correoExistenteEstudiante || correoExistenteUsuario) {
-          return res.status(400).json({ 
-            error: 'El correo electrónico ya está registrado en el sistema',
-            detalles: correoExistenteEstudiante 
-              ? 'Registrado como estudiante' 
-              : 'Registrado como usuario'
-          });
-        }
-      }
-  
-      // Crear un objeto con los campos a actualizar
-      const camposActualizar = {};
-      
-      // Solo incluir los campos que vienen en el body
-      if (nombres !== undefined) camposActualizar.nombres = nombres;
-      if (apellidos !== undefined) camposActualizar.apellidos = apellidos;
-      if (correo !== undefined) camposActualizar.correo = correo;
-      if (anos_cursados !== undefined) camposActualizar.anos_cursados = anos_cursados;
-      if (estado !== undefined) camposActualizar.estado = estado;
-  
-      await estudiante.update(camposActualizar);
-  
-      res.status(200).json({
-        mensaje: 'Estudiante actualizado exitosamente',
-        estudiante: {
-          id: estudiante.id,
-          nombres: estudiante.nombres,
-          apellidos: estudiante.apellidos,
-          rut: estudiante.rut,
-          correo: estudiante.correo,
-          anos_cursados: estudiante.anos_cursados,
-          estado: estudiante.estado
+
+    if (!usuario) {
+      return res.status(404).json({ mensaje: 'Usuario no encontrado' });
+    }
+
+    res.json(usuario);
+  } catch (error) {
+    console.error('Error al obtener usuario:', error);
+    res.status(500).json({ error: 'Error al obtener los datos del usuario' });
+  }
+};
+
+export const actualizarEstudiante = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { nombres, apellidos, correo, anos_cursados, estado } = req.body;
+
+    const estudiante = await Estudiante.findByPk(id);
+    if (!estudiante) {
+      return res.status(404).json({ error: 'Estudiante no encontrado' });
+    }
+
+    // Si se intenta cambiar el correo, verificar que no exista en otras tablas
+    if (correo && correo !== estudiante.correo) {
+      const correoExistenteEstudiante = await Estudiante.findOne({
+        where: {
+          correo,
+          id: { [Op.ne]: id } // Excluir el estudiante actual
         }
       });
-  
-    } catch (error) {
-      console.error('Error al actualizar estudiante:', error);
-      res.status(500).json({
-        error: 'Error al actualizar estudiante',
-        detalles: error.message
+
+      const correoExistenteUsuario = await Usuario.findOne({
+        where: { correo }
       });
+
+      if (correoExistenteEstudiante || correoExistenteUsuario) {
+        return res.status(400).json({
+          error: 'El correo electrónico ya está registrado en el sistema',
+          detalles: correoExistenteEstudiante
+            ? 'Registrado como estudiante'
+            : 'Registrado como usuario'
+        });
+      }
     }
-  };
+
+    // Si se intenta cambiar el RUT, verificar que no exista en otras tablas
+    if (req.body.rut && req.body.rut !== estudiante.rut) {
+      const rutExistenteEstudiante = await Estudiante.findOne({
+        where: {
+          rut: req.body.rut,
+          id: { [Op.ne]: id } // Excluir el estudiante actual
+        }
+      });
+
+      const rutExistenteUsuario = await Usuario.findOne({
+        where: { rut: req.body.rut }
+      });
+
+      if (rutExistenteEstudiante || rutExistenteUsuario) {
+        return res.status(400).json({
+          error: 'El RUT ya está registrado en el sistema',
+          detalles: rutExistenteEstudiante
+            ? 'Registrado como estudiante'
+            : 'Registrado como usuario'
+        });
+      }
+    }
+
+    // Crear un objeto con los campos a actualizar
+    const camposActualizar = {};
+
+    // Solo incluir los campos que vienen en el body
+    if (nombres !== undefined) camposActualizar.nombres = nombres;
+    if (apellidos !== undefined) camposActualizar.apellidos = apellidos;
+    if (correo !== undefined) camposActualizar.correo = correo;
+    if (anos_cursados !== undefined) camposActualizar.anos_cursados = anos_cursados;
+    if (estado !== undefined) camposActualizar.estado = estado;
+
+    await estudiante.update(camposActualizar);
+
+    res.status(200).json({
+      mensaje: 'Estudiante actualizado exitosamente',
+      estudiante: {
+        id: estudiante.id,
+        nombres: estudiante.nombres,
+        apellidos: estudiante.apellidos,
+        rut: estudiante.rut,
+        correo: estudiante.correo,
+        anos_cursados: estudiante.anos_cursados,
+        estado: estudiante.estado
+      }
+    });
+
+  } catch (error) {
+    console.error('Error al actualizar estudiante:', error);
+    res.status(500).json({
+      error: 'Error al actualizar estudiante',
+      detalles: error.message
+    });
+  }
+};
 
 export const eliminarEstudiante = async (req, res) => {
   try {

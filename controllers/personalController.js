@@ -1,5 +1,6 @@
 // controllers/personalController.js
 import Usuario from '../models/Usuario.js';
+import Estudiante from '../models/Estudiante.js';
 import Rol from '../models/Rol.js';
 import bcrypt from 'bcrypt';
 import { enviarCredencialesUsuario } from '../services/emailService.js';
@@ -180,7 +181,6 @@ export const obtenerPersonal = async (req, res) => {
 };
 
 // Crear nuevo personal
-// Crear nuevo personal
 export const crearPersonal = async (req, res) => {
   try {
     const {
@@ -197,15 +197,19 @@ export const crearPersonal = async (req, res) => {
       return res.status(400).json({ error: 'Rol no válido' });
     }
 
-    // Verificar si el RUT ya existe
-    const rutExistente = await Usuario.findOne({ where: { rut } });
-    if (rutExistente) {
+    // Verificar si el RUT ya existe en Usuario o Estudiante
+    const rutExistenteUsuario = await Usuario.findOne({ where: { rut } });
+    const rutExistenteEstudiante = await Estudiante.findOne({ where: { rut } });
+
+    if (rutExistenteUsuario || rutExistenteEstudiante) {
       return res.status(400).json({ error: 'El RUT ya está registrado' });
     }
 
-    // Verificar si el correo ya existe
-    const correoExistente = await Usuario.findOne({ where: { correo } });
-    if (correoExistente) {
+    // Verificar si el correo ya existe en Usuario o Estudiante
+    const correoExistenteUsuario = await Usuario.findOne({ where: { correo } });
+    const correoExistenteEstudiante = await Estudiante.findOne({ where: { correo } });
+
+    if (correoExistenteUsuario || correoExistenteEstudiante) {
       return res.status(400).json({ error: 'El correo ya está registrado' });
     }
 
@@ -256,8 +260,10 @@ export const actualizarPersonal = async (req, res) => {
 
     // Verificar si el nuevo correo ya existe (si se está cambiando)
     if (correo && correo !== usuario.correo) {
-      const correoExistente = await Usuario.findOne({ where: { correo } });
-      if (correoExistente) {
+      const correoExistenteUsuario = await Usuario.findOne({ where: { correo } });
+      const correoExistenteEstudiante = await Estudiante.findOne({ where: { correo } });
+
+      if (correoExistenteUsuario || correoExistenteEstudiante) {
         return res.status(400).json({ error: 'El correo ya está registrado' });
       }
     }

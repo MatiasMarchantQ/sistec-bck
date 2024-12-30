@@ -64,15 +64,21 @@ export const crearUsuario = async (req, res) => {
       });
     }
 
-    const existeCorreo = await Usuario.findOne({ where: { correo } });
-    if (existeCorreo) {
+    // Verificar si el correo ya está registrado en Usuario o Estudiante
+    const existeCorreoUsuario = await Usuario.findOne({ where: { correo } });
+    const existeCorreoEstudiante = await Estudiante.findOne({ where: { correo } });
+
+    if (existeCorreoUsuario || existeCorreoEstudiante) {
       return res.status(400).json({ 
         error: 'El correo ya está registrado' 
       });
     }
 
-    const existeRut = await Usuario.findOne({ where: { rut } });
-    if (existeRut) {
+    // Verificar si el RUT ya está registrado en Usuario o Estudiante
+    const existeRutUsuario = await Usuario.findOne({ where: { rut } });
+    const existeRutEstudiante = await Estudiante.findOne({ where: { rut } });
+
+    if (existeRutUsuario || existeRutEstudiante) {
       return res.status(400).json({ 
         error: 'El RUT ya está registrado' 
       });
@@ -270,6 +276,103 @@ export const loginDirectores = async (req, res) => {
     });
   } catch (error) {
     console.error('Error en login de directores:', error);
+    res.status(500).json({ 
+      error: 'Error interno del servidor', 
+      code: 'SERVER_ERROR',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+export const loginGeneral = async (req, res) => {
+  try {
+    const { rut, contrasena, rememberMe } = req.body;
+
+    // Validar que se proporcionen RUT y contraseña
+    if (!rut || !contrasena) {
+      return res.status(400).json({ 
+        error: 'RUT y contraseña son obligatorios',
+        code: 'MISSING_CREDENTIALS'
+      });
+    }
+
+    // Intentar encontrar al usuario en la tabla de Estudiantes
+    let user = await Estudiante.findOne({
+      where: { rut: { [Op.regexp]: `^${rut}$` } },
+      include: [{ model: Rol, attributes: ['id', 'nombre'] }]
+    });
+
+    // Si no se encuentra, intentar encontrar al usuario en la tabla de Usuarios
+    if (!user) {
+      user = await Usuario.findOne({
+        where: { rut: { [Op.regexp]: `^${rut}$` } },
+        include: [{ model: Rol, attributes: ['id', 'nombre'] }]
+      });
+    }
+
+    // Verificar si el usuario existe
+    if (!user) {
+      return res.status(404).json({ 
+        error: 'Usuario no encontrado',
+        code: 'USER_NOT_FOUND'
+      });
+    }
+
+    // Verificar estado del usuario
+    if (!user.estado) {
+      return res.status(403).json({ 
+        error: 'Cuenta desactivada',
+        code: 'ACCOUNT_DISABLED'
+      });
+    }
+
+    // Función para verificar si una contraseña está hasheada
+    const esContrasenaHasheada = (contrasena) => {
+      return (
+        contrasena && 
+        (contrasena.startsWith('$2b$') || // Bcrypt
+         contrasena.startsWith('$2a$') || // Bcrypt
+         contrasena.length > 60) // Longitud típica de hash
+      );
+    };
+
+    // Validar contraseña
+    let validPassword;
+    if (!esContrasenaHasheada(user.contrasena)) {
+      // Si la contraseña no está hasheada, comparar directamente
+      validPassword = user.contrasena === contrasena;
+    } else {
+      // Si la contraseña está hasheada, usar bcrypt
+      validPassword = await bcrypt.compare(contrasena, user.contrasena);
+    }
+
+    if (!validPassword) {
+      return res.status(401).json({ 
+        error: 'Contraseña incorrecta',
+        code: 'INVALID_PASSWORD'
+      });
+    }
+
+    // Generar tokens
+    const { accessToken, refreshToken } = generateTokens(user, rememberMe);
+
+    // Actualizar el usuario con el nuevo refresh token
+    await user.update({ 
+      refresh_token: refreshToken
+    });
+
+    res.json({ 
+      accessToken, 
+      refreshToken,
+      expiresIn: rememberMe ? '7d' : '1h',
+      nombres: user.nombres,
+      debe_cambiar_contrasena: Boolean(user.debe_cambiar_contrasena),
+      usuario_id: user.id,
+      rol_id: user.Rol.id,
+      rol_nombre: user.Rol.nombre
+    });
+  } catch (error) {
+    console.error('Error en login general:', error);
     res.status(500).json({ 
       error: 'Error interno del servidor', 
       code: 'SERVER_ERROR',
