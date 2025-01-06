@@ -90,6 +90,90 @@ export const enviarCredencialesMasivo = async (req, res) => {
   }
 };
 
+export const enviarCredencialesSeleccionados = async (req, res) => {
+  try {
+    const { estudiantes } = req.body; // Obtener la lista de IDs de estudiantes
+
+    // Buscar estudiantes por IDs
+    const estudiantesAEnviar = await Estudiante.findAll({
+      where: {
+        id: {
+          [Op.in]: estudiantes
+        },
+        estado: true,
+        debe_cambiar_contrasena: true
+      }
+    });
+
+    if (estudiantesAEnviar.length === 0) {
+      return res.status(404).json({
+        mensaje: 'No se encontraron estudiantes seleccionados para enviar credenciales.'
+      });
+    }
+
+    // Iniciar respuesta inmediata
+    res.status(200).json({
+      mensaje: 'Proceso de envío iniciado',
+      total_estudiantes: estudiantesAEnviar.length
+    });
+
+    // Configurar límite de concurrencia
+    const limit = pLimit(5); // Máximo 5 envíos simultáneos
+    const INTERVALO_ENTRE_LOTES = 2000; // 2 segundos entre lotes
+
+    const resultados = [];
+    const errores = [];
+
+    // Procesar en lotes
+    const procesarLote = async (lote) => {
+      const promesas = lote.map(estudiante =>
+        limit(async () => {
+          try {
+            // Generar contraseña temporal si no tiene
+            const contrasenatemporal = estudiante.contrasena ||
+              generarContrasenaTemporalSegura();
+
+            // Enviar credenciales
+            await enviarCredencialesEstudiante(estudiante, contrasenatemporal);
+
+            resultados.push({
+              rut: estudiante.rut,
+              correo: estudiante.correo,
+              nombres: estudiante.nombres,
+              apellidos: estudiante.apellidos,
+              mensaje: 'Credenciales enviadas exitosamente'
+            });
+          } catch (error) {
+            console.error(`Error enviando credenciales a ${estudiante.correo}:`, error);
+            errores.push({
+              rut: estudiante.rut,
+              correo: estudiante.correo,
+              error: error.message
+            });
+          }
+        })
+      );
+
+      return Promise.all(promesas);
+    };
+
+    // Procesar en lotes de 10
+    const TAMAÑO_LOTE = 10;
+    for (let i = 0; i < estudiantesAEnviar.length; i += TAMAÑO_LOTE) {
+      const lote = estudiantesAEnviar.slice(i, i + TAMAÑO_LOTE);
+
+      await procesarLote(lote);
+
+      // Pequeña pausa entre lotes para evitar sobrecargar el servidor de correo
+      await new Promise(resolve => setTimeout(resolve, INTERVALO_ENTRE_LOTES));
+    }
+
+  } catch (error) {
+    console.error('Error en envío de credenciales a estudiantes seleccionados:', error);
+    res.status(500).json({ mensaje: 'Error en el proceso de envío de credenciales' });
+  }
+};
+
 // Función para generar contraseña temporal segura
 const generarContrasenaTemporalSegura = (longitudMinima = 12, longitudMaxima = 16) => {
   const caracteresMayusculas = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';

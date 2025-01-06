@@ -391,7 +391,7 @@ const generateTokens = (user, rememberMe = false, estudianteId = null) => {
       is_estudiante: user.Rol.id === 3 || estudianteId !== null
     },
     process.env.JWT_ACCESS_SECRET,
-    { expiresIn: rememberMe ? '7d' : '1h' }
+    { expiresIn: rememberMe ? '7d' : '5s' }
   );
 
   const refreshToken = jwt.sign(
@@ -499,8 +499,6 @@ export const cambiarContrasena = async (req, res) => {
     const userId = req.user.id; // ID del usuario desde el token
     const userRolId = req.user.rol_id; // Rol del usuario
     const debeCambiarContrasena = Boolean(req.user.debe_cambiar_contrasena); // Estado de cambio de contraseña
-
-    console.log('Rol del usuario:', userRolId);
     let usuario;
 
     // Validación de la nueva contraseña

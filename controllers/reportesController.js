@@ -174,9 +174,6 @@ const obtenerEvolucionPacientes = async (year, semestreFiltro) => {
         (resultado.adultos || resultado.infantiles)
     );
 
-    // Opcional: Imprimir información de depuración
-    console.log('Evolución de Pacientes:', JSON.stringify(resultadosFiltrados, null, 2));
-
     return resultadosFiltrados;
 };
 

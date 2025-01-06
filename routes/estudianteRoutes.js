@@ -9,7 +9,8 @@ import {
   actualizarEstudiantesMasivo,
   enviarCredencialesMasivo,
   enviarCredencialIndividual,
-  cambiarContrasenaEstudiante
+  cambiarContrasenaEstudiante,
+  enviarCredencialesSeleccionados
 } from '../controllers/estudianteController.js';
 
 const router = express.Router();
@@ -22,6 +23,7 @@ router.put('/:id', actualizarEstudiante);
 router.delete('/:id', eliminarEstudiante);
 
 router.post('/enviar-credenciales-masivo', enviarCredencialesMasivo);
+router.post('/enviar-credenciales-seleccionados', enviarCredencialesSeleccionados);
 
 router.put('/:id/cambiar-contrasena', cambiarContrasenaEstudiante);
 router.post('/:id/enviar-credencial', enviarCredencialIndividual);

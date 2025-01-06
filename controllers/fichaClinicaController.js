@@ -1489,7 +1489,6 @@ export const getReevaluaciones = async (req, res) => {
             });
         }
 
-        console.log(fichaOriginal.paciente_id);
         // Construir condiciones de filtrado
         const whereConditions = {
             paciente_id: fichaOriginal.paciente_id,
@@ -1641,8 +1640,6 @@ export const getReevaluaciones = async (req, res) => {
             });
         }
 
-        console.log('Conteo de registros:', resultado.count);
-
         // Formatear resultados
         const reevaluacionesFormateadas = resultado.rows && resultado.rows.length > 0
             ? resultado.rows.map(
@@ -1651,8 +1648,6 @@ export const getReevaluaciones = async (req, res) => {
                     : formatearReevaluacionInfantil
             )
             : [];
-
-        console.log('Reevaluaciones formateadas:', reevaluacionesFormateadas);
 
         // Calcular total de páginas
         const totalPaginas = Math.ceil(resultado.count / parseInt(limite));
@@ -2220,8 +2215,6 @@ export const updateReevaluacion = async (req, res) => {
             factoresRiesgoFamiliares,
             otrosFactoresRiesgoFamiliares
         } = req.body;
-
-        console.log(req.body);
 
         // Validar el tipo de reevaluación
         if (!tipo || (tipo !== 'adulto' && tipo !== 'infantil')) {

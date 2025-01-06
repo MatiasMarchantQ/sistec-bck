@@ -496,9 +496,6 @@ export const crearAsignacion = async (req, res) => {
 // Función para notificar sobre asignación excepcional
 async function notificarAsignacionExcepcional(asignacion) {
   try {
-    console.log('Asignación recibida (JSON):', JSON.stringify(asignacion));
-    console.log('Asignación recibida (Objeto):', asignacion);
-    
     // Extraer el ID de manera segura
     const asignacionId = asignacion.id;
     
@@ -507,8 +504,6 @@ async function notificarAsignacionExcepcional(asignacion) {
       return;
     }
 
-    console.log('Asignación ID:', asignacionId);
-    
     // Busca la asignación con todas las relaciones
     const asignacionCompleta = await Asignacion.findOne({
       where: { id: asignacionId },
@@ -528,10 +523,6 @@ async function notificarAsignacionExcepcional(asignacion) {
       ]
     });
 
-    // Verificaciones adicionales de depuración
-    console.log('Resultado de findOne:', asignacionCompleta);
-    console.log('Existe asignacionCompleta:', !!asignacionCompleta);
-    
     if (!asignacionCompleta) {
       // Intentar encontrar la asignación sin incluir relaciones
       const asignacionBasica = await Asignacion.findByPk(asignacionId);
@@ -549,13 +540,6 @@ async function notificarAsignacionExcepcional(asignacion) {
       console.error('No se encontró la asignación');
       return;
     }
-
-    // Aquí podrías hacer algo con asignacionCompleta si lo necesitas
-    console.log('Detalles de la asignación:', {
-      estudiante: asignacionCompleta.estudiante?.nombres,
-      institucion: asignacionCompleta.institucion?.nombre,
-      receptor: asignacionCompleta.receptor?.nombre
-    });
 
   } catch (error) {
     console.error('Error completo:', error);
@@ -589,8 +573,6 @@ export const actualizarAsignacion = async (req, res) => {
       justificacion_excepcional 
     } = req.body;
 
-    console.log('Datos recibidos para actualizar:', req.body);
-
     const asignacion = await Asignacion.findByPk(id);
     if (!asignacion) {
       return res.status(404).json({ error: 'Asignación no encontrada' });
@@ -617,9 +599,6 @@ export const actualizarAsignacion = async (req, res) => {
         camposActualizar.justificacion_excepcional = null;
       }
     }
-
-    console.log('Campos a actualizar:', camposActualizar);
-
     // Realizar la actualización
     const asignacionActualizada = await asignacion.update(camposActualizar);
 
