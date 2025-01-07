@@ -21,6 +21,10 @@ Receptor.init({
   institucion_id: {
     type: DataTypes.INTEGER,
     allowNull: false
+  },
+  estado: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: true
   }
 }, {
   sequelize,

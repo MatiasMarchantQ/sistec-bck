@@ -17,6 +17,7 @@ router.put('/:id', verifyToken, institucionesController.actualizarInstitucion);
 // Rutas de receptores (dentro del mismo controlador)
 router.post('/:institucion_id/receptores', verifyToken, institucionesController.agregarReceptor);
 router.put('/receptores/:receptor_id', verifyToken, institucionesController.actualizarReceptor);
+router.put('/receptores/:receptor_id/activar-desactivar', verifyToken, institucionesController.activarDesactivarReceptor);
 router.delete('/receptores/:receptor_id', verifyToken, institucionesController.eliminarReceptor);
 
 router.get('/:id', verifyToken, institucionesController.obtenerInstitucionPorId);

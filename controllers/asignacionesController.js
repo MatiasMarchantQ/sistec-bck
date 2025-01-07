@@ -526,17 +526,11 @@ async function notificarAsignacionExcepcional(asignacion) {
     if (!asignacionCompleta) {
       // Intentar encontrar la asignación sin incluir relaciones
       const asignacionBasica = await Asignacion.findByPk(asignacionId);
-      console.log('Asignación básica encontrada:', asignacionBasica);
       
       // Verificar si existen los modelos relacionados
       const estudianteExiste = await Estudiante.findByPk(asignacion.estudiante_id);
       const institucionExiste = await Institucion.findByPk(asignacion.institucion_id);
       const receptorExiste = await Receptor.findByPk(asignacion.receptor_id);
-
-      console.log('Estudiante existe:', !!estudianteExiste);
-      console.log('Institución existe:', !!institucionExiste);
-      console.log('Receptor existe:', !!receptorExiste);
-
       console.error('No se encontró la asignación');
       return;
     }

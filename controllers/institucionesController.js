@@ -40,7 +40,7 @@ export const obtenerInstituciones = async (req, res) => {
         {
           model: Receptor,
           as: 'receptores',
-          attributes: ['id', 'nombre', 'cargo'],
+          attributes: ['id', 'nombre', 'cargo', 'estado'],
           required: false
         }
       ],
@@ -83,7 +83,8 @@ export const crearInstitucion = async (req, res) => {
       if (receptores.length > 0) {
         const receptoresData = receptores.map(receptor => ({
           ...receptor,
-          institucion_id: nuevaInstitucion.id
+          institucion_id: nuevaInstitucion.id,
+          estado: true
         }));
         await Receptor.bulkCreate(receptoresData);
       }
@@ -93,7 +94,7 @@ export const crearInstitucion = async (req, res) => {
         include: [{
           model: Receptor,
           as: 'receptores',
-          attributes: ['id', 'nombre', 'cargo']
+          attributes: ['id', 'nombre', 'cargo', 'estado']
         }]
       });
   
@@ -142,7 +143,8 @@ export const agregarReceptor = async (req, res) => {
       const nuevoReceptor = await Receptor.create({
         institucion_id,
         nombre,
-        cargo
+        cargo,
+        estado: true
       });
   
       res.status(201).json(nuevoReceptor);
@@ -155,7 +157,7 @@ export const agregarReceptor = async (req, res) => {
   export const actualizarReceptor = async (req, res) => {
     try {
       const { receptor_id } = req.params;
-      const { nombre, cargo } = req.body;
+      const { nombre, cargo, estado } = req.body; // Asegúrate de incluir estado
   
       const receptor = await Receptor.findByPk(receptor_id);
       if (!receptor) {
@@ -164,13 +166,37 @@ export const agregarReceptor = async (req, res) => {
   
       await receptor.update({
         nombre,
-        cargo
+        cargo,
+        estado: estado !== undefined ? estado : receptor.estado // Actualiza el estado si se proporciona
       });
   
       res.json(receptor);
     } catch (error) {
       console.error('Error al actualizar receptor:', error);
       res.status(500).json({ error: 'Error al actualizar el receptor' });
+    }
+  };
+
+  export const activarDesactivarReceptor = async (req, res) => {
+    try {
+      const { receptor_id } = req.params;
+  
+      const receptor = await Receptor.findByPk(receptor_id);
+      if (!receptor) {
+        return res.status(404).json({ error: 'Receptor no encontrado' });
+      }
+  
+      // Cambiar el estado del receptor
+      receptor.estado = !receptor.estado; // Cambia el estado
+      await receptor.save();
+  
+      res.json({
+        mensaje: receptor.estado ? 'Receptor activado exitosamente' : 'Receptor desactivado exitosamente',
+        receptor
+      });
+    } catch (error) {
+      console.error('Error al activar/desactivar receptor:', error);
+      res.status(500).json({ error: 'Error al activar/desactivar el receptor' });
     }
   };
   
@@ -238,6 +264,7 @@ export const agregarReceptor = async (req, res) => {
     actualizarInstitucion,
     agregarReceptor,
     actualizarReceptor,
+    activarDesactivarReceptor,
     eliminarReceptor,
     obtenerInstitucionPorId,
     obtenerReceptorPorId

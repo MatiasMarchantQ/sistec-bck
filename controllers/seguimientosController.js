@@ -393,8 +393,6 @@ export const actualizarSeguimientoAdulto = async (req, res) => {
       ...datosActualizacion 
     } = req.body;
 
-    console.log('Datos recibidos para actualización:', JSON.stringify(req.body, null, 2));
-
     const seguimientoExistente = await SeguimientoAdulto.findByPk(id);
 
     if (!seguimientoExistente) {

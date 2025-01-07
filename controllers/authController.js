@@ -391,7 +391,7 @@ const generateTokens = (user, rememberMe = false, estudianteId = null) => {
       is_estudiante: user.Rol.id === 3 || estudianteId !== null
     },
     process.env.JWT_ACCESS_SECRET,
-    { expiresIn: rememberMe ? '7d' : '5s' }
+    { expiresIn: rememberMe ? '7d' : '1h' }
   );
 
   const refreshToken = jwt.sign(

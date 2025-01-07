@@ -61,8 +61,11 @@ export const obtenerReceptoresPorInstitucion = async (req, res) => {
   const { institucionId } = req.query; // Obtener el ID de la institución desde los parámetros de consulta
   try {
     const receptores = await Receptor.findAll({
-      where: { institucion_id: institucionId },
-      attributes: ['id', 'nombre', 'cargo']
+      where: { 
+        institucion_id: institucionId,
+        estado: true // Filtrar solo los receptores activos
+      },
+      attributes: ['id', 'nombre', 'cargo', 'estado'] // Incluir el estado en los atributos
     });
     res.json(receptores);
   } catch (error) {
