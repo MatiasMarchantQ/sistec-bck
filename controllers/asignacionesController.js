@@ -72,8 +72,8 @@ export const obtenerAsignaciones = async (req, res) => {
         [
           Sequelize.literal(`(
             SELECT COUNT(*) 
-            FROM Asignaciones 
-            WHERE Asignaciones.estudiante_id = Estudiante.id
+            FROM asignaciones 
+            WHERE asignaciones.estudiante_id = Estudiante.id
           )`), 
           'DESC'
         ],
