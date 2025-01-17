@@ -1536,7 +1536,7 @@ export const obtenerDatosDashboard = async (req, res) => {
 
 const obtenerDiagnosticosHistoricosAdultos = async () => {
     // Subquery para obtener la última reevaluación de cada paciente
-    const subquery = await FichaClinicaAdulto.findAll({
+    let subquery = await FichaClinicaAdulto.findAll({
         attributes: [
             'paciente_id',
             [sequelize.fn('MAX', sequelize.col('id')), 'ultimaFichaId']
