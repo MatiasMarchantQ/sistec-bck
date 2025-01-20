@@ -275,7 +275,6 @@ export const obtenerInstitucionesConAsignaciones = async (req, res) => {
       offset: Number(offset)
     };
 
-    // Obtener instituciones paginadas
     const { count, rows: instituciones } = await Institucion.findAndCountAll(institutionQueryOptions);
 
     // Obtener asignaciones para las instituciones obtenidas

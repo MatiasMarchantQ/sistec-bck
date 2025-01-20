@@ -1329,7 +1329,7 @@ export const exportarFichasClinicas = async (req, res) => {
                 nombres: paciente.nombres,
                 apellidos: paciente.apellidos,
                 institucion: ficha.Institucion.nombre,
-                tipoInstitucion: ficha.Institucion.TipoInstitucion?.nombre || 'No especificado',
+                tipoInstitucion: ficha.Institucion.TipoInstitucion?.tipo || 'No especificado',
                 fechaInicial: primeraFicha ? new Date(primeraFicha.createdAt).toLocaleDateString() : 'No registrada',
                 fechaFinal: ultimaFicha ? new Date(ultimaFicha.createdAt).toLocaleDateString() : 'No registrada',
                 reevaluaciones: ficha.reevaluaciones

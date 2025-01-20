@@ -75,7 +75,7 @@ export const crearSeguimientoInfantil = async (req, res) => {
                 {
                     model: PacienteInfantil,
                     as: 'paciente_infantil',
-                    attributes: ['nombres', 'apellidos', 'fecha_nacimiento']
+                    attributes: ['nombres', 'apellidos', 'rut', 'fecha_nacimiento','edad','telefono_principal','telefono_secundario']
                 }
             ]
         });
@@ -139,7 +139,7 @@ export const obtenerSeguimientosInfantiles = async (req, res) => {
                 {
                     model: PacienteInfantil,
                     as: 'paciente_infantil',
-                    attributes: ['nombres', 'apellidos']
+                    attributes: ['nombres', 'apellidos', 'rut', 'fecha_nacimiento','edad','telefono_principal','telefono_secundario']
                 },
                 {
                   model: Usuario,
@@ -570,7 +570,7 @@ export const actualizarSeguimientoInfantil = async (req, res) => {
         {
           model: PacienteInfantil,
           as: 'paciente_infantil',
-          attributes: ['nombres', 'apellidos', 'fecha_nacimiento']
+          attributes: ['nombres', 'apellidos', 'rut', 'fecha_nacimiento','edad','telefono_principal','telefono_secundario']
         }
       ]
     });

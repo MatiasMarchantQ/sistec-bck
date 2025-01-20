@@ -25,7 +25,6 @@ const testConnection = async () => {
   }
 };
 
-// Ejecutar la prueba de conexión
 testConnection();
 
 export default pool;
