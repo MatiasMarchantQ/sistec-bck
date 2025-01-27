@@ -737,7 +737,7 @@ export const solicitarRecuperacionContrasena = async (req, res) => {
     // Bloquear si se han excedido los intentos
     if (usuario.intentos_recuperacion >= 3) {
       if (!usuario.bloqueado_hasta || new Date() > usuario.bloqueado_hasta) {
-        usuario.bloqueado_hasta = new Date(Date.now() + 30 * 60 * 1000); // Bloquear por 30 minutos
+        usuario.bloqueado_hasta = new Date(Date.now() + 15 * 60 * 1000); // Bloquear por 30 minutos
         await usuario.save();
         return res.status(429).json({ 
           error: 'Demasiados intentos de recuperación. Por favor, inténtelo más tarde.' 

@@ -354,6 +354,27 @@ export const crearAsignacion = async (req, res) => {
       });
     }
 
+    const estudiantesEnPeriodo = await Asignacion.count({
+      where: {
+        institucion_id,
+        [Op.or]: [
+          // Periodos que se superponen
+          {
+            fecha_inicio: { [Op.lte]: fecha_fin },
+            fecha_fin: { [Op.gte]: fecha_inicio }
+          }
+        ]
+      }
+    });
+    
+    if (estudiantesEnPeriodo >= 7) {
+      await transaction.rollback();
+      return res.status(400).json({ 
+        error: 'Límite de 7 estudiantes alcanzado para esta institución en el periodo indicado',
+        limite: 7
+      });
+    }
+
     // Verificar asignaciones existentes para el MISMO ESTUDIANTE
     const asignacionesExistentesEstudiante = await Asignacion.findAll({
       where: {
@@ -419,11 +440,11 @@ export const crearAsignacion = async (req, res) => {
           // Nueva asignación que comienza dentro de un periodo existente
           {
             fecha_inicio: { [Op.lte]: fecha_inicio },
-            fecha_fin: { [Op.gte]: fecha_inicio }
+            fecha_fin: { [Op.gt]: fecha_inicio }
           },
           // Nueva asignación que termina dentro de un periodo existente
           {
-            fecha_inicio: { [Op.lte]: fecha_fin },
+            fecha_inicio: { [Op.lt]: fecha_fin },
             fecha_fin: { [Op.gte]: fecha_fin }
           },
           // Nueva asignación que contiene completamente un periodo existente
@@ -554,46 +575,200 @@ function formatearFecha(fecha) {
 
 // Actualizar una asignación
 export const actualizarAsignacion = async (req, res) => {
+  const transaction = await sequelize.transaction();
+
   try {
     const { id } = req.params;
     const { 
+      estudiante_id,
       institucion_id, 
       receptor_id,
       fecha_inicio, 
       fecha_fin, 
       estado,
-      es_asignacion_excepcional,
+      es_asignacion_excepcional = false,
       justificacion_excepcional 
     } = req.body;
 
+    // Encontrar la asignación original
     const asignacion = await Asignacion.findByPk(id);
     if (!asignacion) {
+      await transaction.rollback();
       return res.status(404).json({ error: 'Asignación no encontrada' });
     }
 
-    const camposActualizar = {};
-    
-    // Campos base
-    if (institucion_id !== undefined) camposActualizar.institucion_id = institucion_id;
-    if (receptor_id !== undefined) camposActualizar.receptor_id = receptor_id;
-    if (fecha_inicio !== undefined) camposActualizar.fecha_inicio = fecha_inicio;
-    if (fecha_fin !== undefined) camposActualizar.fecha_fin = fecha_fin;
-    if (estado !== undefined) camposActualizar.estado = estado;
+    // Verificar si el estudiante y la institución existen
+    const estudiante = await Estudiante.findByPk(estudiante_id || asignacion.estudiante_id);
+    const institucion = await Institucion.findByPk(institucion_id || asignacion.institucion_id);
 
-    // Manejar asignación excepcional y justificación
-    if (es_asignacion_excepcional !== undefined) {
-      camposActualizar.es_asignacion_excepcional = es_asignacion_excepcional;
-      
-      // Si es una asignación excepcional, incluir justificación
-      if (es_asignacion_excepcional) {
-        camposActualizar.justificacion_excepcional = justificacion_excepcional || null;
-      } else {
-        // Si no es una asignación excepcional, limpiar justificación
-        camposActualizar.justificacion_excepcional = null;
-      }
+    if (!estudiante || !institucion) {
+      await transaction.rollback();
+      return res.status(400).json({ error: 'Estudiante o institución no encontrados' });
     }
+
+    if (!estudiante.estado) {
+      await transaction.rollback();
+      return res.status(400).json({ 
+        error: 'No se pueden actualizar asignaciones para estudiantes inactivos',
+        message: 'El estudiante debe estar activo para tener una asignación'
+      });
+    }
+
+    // Validaciones de fechas
+    const fechaInicio = fecha_inicio || asignacion.fecha_inicio;
+    const fechaFin = fecha_fin || asignacion.fecha_fin;
+
+    if (new Date(fechaInicio) >= new Date(fechaFin)) {
+      await transaction.rollback();
+      return res.status(400).json({ 
+        error: 'La fecha de inicio debe ser anterior a la fecha de fin' 
+      });
+    }
+
+    // Verificar límite de estudiantes en la institución
+    const estudiantesEnPeriodo = await Asignacion.count({
+      where: {
+        id: { [Op.ne]: id }, // Excluir la asignación actual
+        institucion_id: institucion_id || asignacion.institucion_id,
+        [Op.or]: [
+          {
+            fecha_inicio: { [Op.lte]: fechaFin },
+            fecha_fin: { [Op.gte]: fechaInicio }
+          }
+        ]
+      }
+    });
+    
+    if (estudiantesEnPeriodo >= 7) {
+      await transaction.rollback();
+      return res.status(400).json({ 
+        error: 'Límite de 7 estudiantes alcanzado para esta institución en el periodo indicado',
+        limite: 7
+      });
+    }
+
+    // Verificar asignaciones existentes para el MISMO ESTUDIANTE
+    const estudianteIdActual = estudiante_id || asignacion.estudiante_id;
+    const asignacionesExistentesEstudiante = await Asignacion.findAll({
+      where: {
+        id: { [Op.ne]: id }, // Excluir la asignación actual
+        estudiante_id: estudianteIdActual,
+        [Op.or]: [
+          {
+            fecha_inicio: { [Op.lte]: fechaInicio },
+            fecha_fin: { [Op.gte]: fechaFin }
+          },
+          {
+            fecha_inicio: { [Op.lte]: fechaInicio },
+            fecha_fin: { [Op.gte]: fechaInicio }
+          },
+          {
+            fecha_inicio: { [Op.lte]: fechaFin },
+            fecha_fin: { [Op.gte]: fechaFin }
+          },
+          {
+            fecha_inicio: { [Op.gte]: fechaInicio },
+            fecha_fin: { [Op.lte]: fechaFin }
+          }
+        ]
+      },
+      include: [
+        { 
+          model: Institucion, 
+          attributes: ['id', 'nombre'] 
+        }
+      ]
+    });
+
+    // Si el estudiante ya tiene asignaciones en periodos superpuestos
+    if (asignacionesExistentesEstudiante.length > 0 && !es_asignacion_excepcional) {
+      await transaction.rollback();
+      return res.status(400).json({ 
+        error: 'El estudiante ya tiene una asignación que se superpone con el periodo indicado.',
+        asignaciones: asignacionesExistentesEstudiante.map(a => ({
+          institucion: {
+            id: a.Institucion.id,
+            nombre: a.Institucion.nombre
+          },
+          fecha_inicio: a.fecha_inicio,
+          fecha_fin: a.fecha_fin
+        }))
+      });
+    }
+
+    // Verificar asignaciones existentes para el receptor en el mismo periodo
+    const receptorIdActual = receptor_id || asignacion.receptor_id;
+    const institucionIdActual = institucion_id || asignacion.institucion_id;
+    const asignacionesExistentesReceptor = await Asignacion.findAll({
+      where: {
+        id: { [Op.ne]: id }, // Excluir la asignación actual
+        institucion_id: institucionIdActual,
+        receptor_id: receptorIdActual,
+        [Op.or]: [
+          {
+            fecha_inicio: { [Op.lte]: fechaInicio },
+            fecha_fin: { [Op.gte]: fechaFin }
+          },
+          {
+            fecha_inicio: { [Op.lte]: fechaInicio },
+            fecha_fin: { [Op.gte]: fechaInicio }
+          },
+          {
+            fecha_inicio: { [Op.lte]: fechaFin },
+            fecha_fin: { [Op.gte]: fechaFin }
+          },
+          {
+            fecha_inicio: { [Op.gte]: fechaInicio },
+            fecha_fin: { [Op.lte]: fechaFin }
+          }
+        ]
+      }
+    });
+
+    // Si hay asignaciones existentes para el receptor y NO es una asignación excepcional
+    if (asignacionesExistentesReceptor.length > 0 && !es_asignacion_excepcional) {
+      await transaction.rollback();
+      return res.status(400).json({ 
+        error: 'Ya hay asignaciones para este receptor en el periodo indicado.',
+        asignaciones: asignacionesExistentesReceptor.map(a => ({
+          estudiante: a.estudiante_id,
+          fecha_inicio: a.fecha_inicio,
+          fecha_fin: a.fecha_fin
+        })),
+        permitirExcepcional: true
+      });
+    }
+
+    // Si es una asignación excepcional, requiere justificación
+    if (es_asignacion_excepcional && !justificacion_excepcional) {
+      await transaction.rollback();
+      return res.status(400).json({ 
+        error: 'Se requiere una justificación para la asignación excepcional'
+      });
+    }
+
+    // Preparar campos para actualización
+    const camposActualizar = {
+      institucion_id: institucion_id || asignacion.institucion_id,
+      receptor_id: receptor_id || asignacion.receptor_id,
+      fecha_inicio: fechaInicio,
+      fecha_fin: fechaFin,
+      estado: estado || asignacion.estado,
+      es_asignacion_excepcional,
+      justificacion_excepcional: es_asignacion_excepcional 
+        ? justificacion_excepcional 
+        : null
+    };
+
     // Realizar la actualización
-    const asignacionActualizada = await asignacion.update(camposActualizar);
+    const asignacionActualizada = await asignacion.update(camposActualizar, { transaction });
+
+    // Notificar sobre asignación excepcional si aplica
+    if (es_asignacion_excepcional) {
+      await notificarAsignacionExcepcional(asignacionActualizada);
+    }
+
+    await transaction.commit();
 
     // Cargar la asignación actualizada con sus relaciones
     const asignacionCompleta = await Asignacion.findByPk(id, {
@@ -605,11 +780,14 @@ export const actualizarAsignacion = async (req, res) => {
     });
 
     res.status(200).json({
-      mensaje: 'Asignación actualizada exitosamente',
+      mensaje: es_asignacion_excepcional 
+        ? 'Asignación excepcional actualizada exitosamente' 
+        : 'Asignación actualizada exitosamente',
       asignacion: asignacionCompleta
     });
 
   } catch (error) {
+    await transaction.rollback();
     console.error('Error al actualizar asignación:', error);
     res.status(500).json({
       error: 'Error al actualizar asignación',
