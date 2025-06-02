@@ -23,9 +23,62 @@ const FichaClinicaInfantil = sequelize.define('FichaClinicaInfantil', {
     type: DataTypes.STRING,
     allowNull: true
   },
-  diagnostico_dsm: {
+  diagnostico_tepsi: {
     type: DataTypes.STRING,
     allowNull: true
+  },
+  // ========== CAMPOS DSM (para pacientes 0-2 años) ==========
+  // Edad Mental
+  edad_mental: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    comment: 'Edad Mental DSM'
+  },
+  em_ec: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    comment: 'EM/EC DSM'
+  },
+  pe: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    comment: 'PE DSM'
+  },
+  
+  // Coeficiente de Desarrollo (CD)
+  coeficiente_desarrollo: {
+    type: DataTypes.ENUM('Normal', 'Riesgo', 'Retraso'),
+    allowNull: true,
+    comment: 'Coeficiente de Desarrollo DSM'
+  },
+  
+  // Áreas de evaluación DSM
+  area_coordinacion: {
+    type: DataTypes.ENUM('Normal', 'Déficit'),
+    allowNull: true,
+    comment: 'Evaluación área Coordinación DSM'
+  },
+  area_social: {
+    type: DataTypes.ENUM('Normal', 'Déficit'),
+    allowNull: true,
+    comment: 'Evaluación área Social DSM'
+  },
+  area_lenguaje: {
+    type: DataTypes.ENUM('Normal', 'Déficit'),
+    allowNull: true,
+    comment: 'Evaluación área Lenguaje DSM'
+  },
+  area_motora: {
+    type: DataTypes.ENUM('Normal', 'Déficit'),
+    allowNull: true,
+    comment: 'Evaluación área Motora DSM'
+  },
+  
+  // Diagnóstico final DSM
+  diagnostico_dsm: {
+    type: DataTypes.ENUM('Normal', 'Normal con rezago', 'Riesgo', 'Retraso'),
+    allowNull: true,
+    comment: 'Diagnóstico final DSM para pacientes 0-2 años'
   },
   con_quien_vive: {
     type: DataTypes.STRING,

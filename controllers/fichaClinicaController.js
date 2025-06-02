@@ -237,7 +237,7 @@ export const getFichasClinicasPorInstitucion = async (req, res) => {
             },
             diagnostico: {
                 id: null,
-                nombre: ficha.diagnostico_dsm || 'Sin diagnóstico'
+                nombre: ficha.diagnostico_tepsi || 'Sin diagnóstico'
             },
             reevaluaciones: reevaluacionesInfantilesPorPaciente[ficha.PacienteInfantil.id] || 0,
             createdAt: ficha.createdAt,
@@ -445,6 +445,15 @@ export const createFichaClinicaInfantil = async (req, res) => {
             telefonoPrincipal,
             telefonoSecundario,
             puntajeDPM,
+            diagnosticoTEPSI,
+            edadMental,
+            emEc,
+            pe,
+            coeficienteDesarrollo,
+            areaCoordinacion,
+            areaSocial,
+            areaLenguaje,
+            areaMotora,
             diagnosticoDSM,
             padres,
             conQuienVive,
@@ -530,15 +539,22 @@ export const createFichaClinicaInfantil = async (req, res) => {
             }
         }
 
-
-
         // Crear la ficha clínica
         const fichaClinica = await FichaClinicaInfantil.create({
             paciente_id: paciente.id,
             puntaje_dpm: puntajeDPM,
+            diagnostico_tepsi: diagnosticoTEPSI,
+            edad_mental: edadMental,
+            em_ec: emEc,
+            pe: pe,
+            coeficiente_desarrollo: coeficienteDesarrollo,
+            area_coordinacion: areaCoordinacion,
+            area_social: areaSocial,
+            area_lenguaje: areaLenguaje,
+            area_motora: areaMotora,
             diagnostico_dsm: diagnosticoDSM,
             con_quien_vive: conQuienVive,
-            ciclo_vital_familiar_id: cicloVitalFamiliar,
+            ciclo_vital_familiar_id: cicloVitalFamiliar || null,
             localidad,
             estudiante_id,
             usuario_id,
@@ -546,13 +562,21 @@ export const createFichaClinicaInfantil = async (req, res) => {
             is_reevaluacion: isReevaluacion
         }, { transaction: t });
 
-        // Guardar tipo de familia
-        await FichaTipoFamilia.create({
-            ficha_clinica_id: fichaClinica.id,
-            tipo_familia_id: tipoFamilia !== 'Otras' ? tipoFamilia : null, // Guardar ID o null
-            tipo_familia_otro: tipoFamilia === 'Otras' ? tipoFamiliaOtro : null, // Guardar el texto ingresado
-            tipo_ficha: 'infantil'
-        }, { transaction: t });
+        let tipoFamiliaId = null;
+
+        if (tipoFamilia && tipoFamilia !== 'Otras' && !isNaN(tipoFamilia)) {
+            tipoFamiliaId = parseInt(tipoFamilia);
+        }
+
+        // Solo crea el registro si al menos uno de los dos campos tiene valor
+        if (tipoFamiliaId !== null || (tipoFamilia === 'Otras' && tipoFamiliaOtro)) {
+            await FichaTipoFamilia.create({
+                ficha_clinica_id: fichaClinica.id,
+                tipo_familia_id: tipoFamiliaId,
+                tipo_familia_otro: tipoFamilia === 'Otras' ? tipoFamiliaOtro : null,
+                tipo_ficha: 'infantil'
+            }, { transaction: t });
+        }
 
         // Guardar factores de riesgo del niño
         if (factoresRiesgoNino && factoresRiesgoNino.length > 0) {
@@ -1034,6 +1058,17 @@ function formatearFichaInfantil(fichaClinica) {
         },
         evaluacionPsicomotora: {
             puntajeDPM: fichaClinica.puntaje_dpm || null,
+            diagnosticoTEPSI: fichaClinica.diagnostico_tepsi || null,
+            edadMental: fichaClinica.edad_mental || null,
+            emEc: fichaClinica.em_ec || null,
+            pe: fichaClinica.pe || null,
+            coeficienteDesarrollo: fichaClinica.coeficiente_desarrollo || null,
+            areasEvaluacion: {
+                areaCoordinacion: fichaClinica.area_coordinacion || null,
+                areaSocial: fichaClinica.area_social || null,
+                areaLenguaje: fichaClinica.area_lenguaje || null,
+                areaMotora: fichaClinica.area_motora || null
+            },
             diagnosticoDSM: fichaClinica.diagnostico_dsm || null
         },
         informacionFamiliar: {
@@ -1336,11 +1371,11 @@ export const exportarFichasClinicas = async (req, res) => {
             };
 
             if (esInfantil) {
-                resultado.diagnosticoDSMInicial = primeraFicha ? primeraFicha.diagnostico_dsm : 'No registrado';
-                resultado.diagnosticoDSMFinal = ultimaFicha ? ultimaFicha.diagnostico_dsm : 'No registrado';
+                resultado.diagnosticoTEPSIInicial = primeraFicha ? primeraFicha.diagnostico_tepsi : 'No registrado';
+                resultado.diagnosticoTEPSIFinal = ultimaFicha ? ultimaFicha.diagnostico_tepsi : 'No registrado';
 
                 // Comparar diagnósticos
-                resultado.estadoDiagnostico = compararDiagnosticos(resultado.diagnosticoDSMInicial, resultado.diagnosticoDSMFinal);
+                resultado.estadoDiagnostico = compararDiagnosticos(resultado.diagnosticoTEPSIInicial, resultado.diagnosticoTEPSIFinal);
             } else {
                 resultado.valorHbA1cInicial = primeraFicha ? primeraFicha.valor_hbac1 : 'No registrado';
                 resultado.valorHbA1cFinal = ultimaFicha ? ultimaFicha.valor_hbac1 : 'No registrado';
@@ -1368,8 +1403,8 @@ export const exportarFichasClinicas = async (req, res) => {
         // Agregar columnas específicas según el tipo de ficha o si se exportan ambos
         const columnasExtras = tipoFichaFinal === 'infantil'
             ? [
-                { header: 'Diagnóstico DSM Inicial', key: 'diagnosticoDSMInicial' },
-                { header: 'Diagnóstico DSM Final', key: 'diagnosticoDSMFinal' },
+                { header: 'Diagnóstico DSM Inicial', key: 'diagnosticoTEPSIInicial' },
+                { header: 'Diagnóstico DSM Final', key: 'diagnosticoTEPSIFinal' },
                 { header: 'Estado Diagnóstico', key: 'estadoDiagnostico' }
             ]
             : tipoFichaFinal === 'adulto'
@@ -1380,8 +1415,8 @@ export const exportarFichasClinicas = async (req, res) => {
                 ]
                 : [
                     // Si no hay tipo específico, incluir columnas de ambos
-                    { header: 'Diagnóstico DSM Inicial', key: 'diagnosticoDSMInicial' },
-                    { header: 'Diagnóstico DSM Final', key: 'diagnosticoDSMFinal' },
+                    { header: 'Diagnóstico DSM Inicial', key: 'diagnosticoTEPSIInicial' },
+                    { header: 'Diagnóstico DSM Final', key: 'diagnosticoTEPSIFinal' },
                     { header: 'Estado Diagnóstico', key: 'estadoDiagnostico' },
                     { header: 'Valor HbA1c Inicial', key: 'valorHbA1cInicial' },
                     { header: 'Valor HbA1c Final', key: 'valorHbA1cFinal' },
@@ -1766,7 +1801,18 @@ function formatearReevaluacionInfantil(reevaluacion) {
         },
         evaluacionPsicomotora: {
             puntajeDPM: reevaluacion.puntaje_dpm,
-            diagnosticoDSM: reevaluacion.diagnostico_dsm
+            diagnosticoTEPSI: reevaluacion.diagnostico_tepsi,
+            edadMental: reevaluacion.edad_mental || null,
+            emEc: reevaluacion.em_ec || null,
+            pe: reevaluacion.pe || null,
+            coeficienteDesarrollo: reevaluacion.coeficiente_desarrollo || null,
+            areasEvaluacion: {
+                areaCoordinacion: reevaluacion.area_coordinacion || null,
+                areaSocial: reevaluacion.area_social || null,
+                areaLenguaje: reevaluacion.area_lenguaje || null,
+                areaMotora: reevaluacion.area_motora || null
+            },
+            diagnosticoDSM: reevaluacion.diagnostico_dsm || null
         },
         informacionFamiliar: {
             conQuienVive: reevaluacion.con_quien_vive,
@@ -2209,6 +2255,15 @@ export const updateReevaluacion = async (req, res) => {
             valorHbac1,
             factoresRiesgo,
             puntajeDPM,
+            diagnosticoTEPSI,
+            edadMental,
+            emEc,
+            pe,
+            coeficienteDesarrollo,
+            areaCoordinacion,
+            areaSocial,
+            areaLenguaje,
+            areaMotora,
             diagnosticoDSM,
             localidad,
             factoresRiesgoNino,
@@ -2267,6 +2322,15 @@ export const updateReevaluacion = async (req, res) => {
             }
             : {
                 puntaje_dpm: puntajeDPM,
+                diagnostico_tepsi: diagnosticoTEPSI,
+                edad_mental: edadMental,
+                em_ec: emEc,
+                pe: pe,
+                coeficiente_desarrollo: coeficienteDesarrollo,
+                area_coordinacion: areaCoordinacion,
+                area_social: areaSocial,
+                area_lenguaje: areaLenguaje,
+                area_motora: areaMotora,
                 diagnostico_dsm: diagnosticoDSM,
                 localidad
             };
@@ -2458,6 +2522,15 @@ export const updateReevaluacionInfantil = async (req, res) => {
             telefonoPrincipal,
             telefonoSecundario,
             puntajeDPM,
+            diagnosticoTEPSI,
+            edadMental,
+            emEc,
+            pe,
+            coeficienteDesarrollo,
+            areaCoordinacion,
+            areaSocial,
+            areaLenguaje,
+            areaMotora,
             diagnosticoDSM,
             padres,
             conQuienVive,
@@ -2489,6 +2562,15 @@ export const updateReevaluacionInfantil = async (req, res) => {
             con_quien_vive: conQuienVive,
             ciclo_vital_familiar_id: cicloVitalFamiliar,
             puntaje_dpm: puntajeDPM,
+            diagnostico_tepsi: diagnosticoTEPSI,
+            edad_mental: edadMental,
+            em_ec: emEc,
+            pe: pe,
+            coeficiente_desarrollo: coeficienteDesarrollo,
+            area_coordinacion: areaCoordinacion,
+            area_social: areaSocial,
+            area_lenguaje: areaLenguaje,
+            area_motora: areaMotora,
             diagnostico_dsm: diagnosticoDSM,
             localidad
         }, { transaction: t });

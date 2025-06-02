@@ -169,8 +169,8 @@ const obtenerEvolucionPacientes = async (year, semestreFiltro) => {
     const resultados = await Promise.all(anosUnicos.map(obtenerPacientesParaAno));
 
     // Filtrar resultados nulos y aquellos sin datos
-    const resultadosFiltrados = resultados.filter(resultado => 
-        resultado && 
+    const resultadosFiltrados = resultados.filter(resultado =>
+        resultado &&
         (resultado.adultos || resultado.infantiles)
     );
 
@@ -252,7 +252,7 @@ const obtenerEvolucionDiagnosticosInfantiles = async (year, semestreFiltro) => {
                 [Op.lte]: moment().endOf('year').toDate()
             }
         };
-    
+
         // Si se especifica un mes, ajustar la condición
         if (mes !== null) {
             whereCondition.createdAt = {
@@ -260,7 +260,7 @@ const obtenerEvolucionDiagnosticosInfantiles = async (year, semestreFiltro) => {
                 [Op.lte]: moment(`${ano}-${mes + 1}-01`).endOf('month').toDate()
             };
         }
-    
+
         // Obtener fichas iniciales del año/mes
         const fichasIniciales = await FichaClinicaInfantil.findAll({
             where: {
@@ -270,10 +270,10 @@ const obtenerEvolucionDiagnosticosInfantiles = async (year, semestreFiltro) => {
             order: [['createdAt', 'ASC']],
             raw: false
         });
-    
+
         // Obtener todas las reevaluaciones para los pacientes con fichas iniciales
         const pacientesConFichasIniciales = fichasIniciales.map(ficha => ficha.paciente_id);
-        
+
         const reevaluaciones = await FichaClinicaInfantil.findAll({
             where: {
                 paciente_id: { [Op.in]: pacientesConFichasIniciales },
@@ -289,10 +289,10 @@ const obtenerEvolucionDiagnosticosInfantiles = async (year, semestreFiltro) => {
             order: [['createdAt', 'ASC']],
             raw: true
         });
-    
+
         // Mapeo de orden de diagnósticos
         const ordenDiagnosticos = ['Normal', 'Riesgo', 'Retraso'];
-    
+
         // Agrupar diagnósticos
         const diagnosticosIniciales = {};
         const diagnosticosFinales = {};
@@ -301,41 +301,47 @@ const obtenerEvolucionDiagnosticosInfantiles = async (year, semestreFiltro) => {
             'Riesgo': { mejora: 0, empeora: 0, sinCambios: 0 },
             'Retraso': { mejora: 0, empeora: 0, sinCambios: 0 }
         };
-    
+
         // Procesar fichas iniciales
         fichasIniciales.forEach(ficha => {
-            const diagnostico = ficha.diagnostico_dsm || 'Sin Diagnóstico';
+            const diagnostico = ficha.diagnostico_tepsi || 'Sin Diagnóstico';
             diagnosticosIniciales[diagnostico] = (diagnosticosIniciales[diagnostico] || 0) + 1;
         });
-    
+
         // Procesar reevaluaciones
         reevaluaciones.forEach(reevaluacion => {
             // Encontrar la ficha inicial original para este paciente
             const fichaInicial = fichasIniciales.find(
                 ficha => ficha.paciente_id === reevaluacion.paciente_id
             );
-    
+
             if (fichaInicial) {
-                const diagnosticoInicial = fichaInicial.diagnostico_dsm || 'Sin Diagnóstico';
-                const diagnosticoFinal = reevaluacion.diagnostico_dsm || 'Sin Diagnóstico';
-    
+                const diagnosticoInicial = fichaInicial.diagnostico_tepsi || 'Sin Diagnóstico';
+                const diagnosticoFinal = reevaluacion.diagnostico_tepsi || 'Sin Diagnóstico';
+
                 // Contar diagnósticos finales
-                diagnosticosFinales[diagnosticoFinal] = 
+                diagnosticosFinales[diagnosticoFinal] =
                     (diagnosticosFinales[diagnosticoFinal] || 0) + 1;
-    
+
                 // Calcular evolución
                 const indiceInicial = ordenDiagnosticos.indexOf(diagnosticoInicial);
                 const indiceFinal = ordenDiagnosticos.indexOf(diagnosticoFinal);
-    
-                const evolucion = 
+
+                const evolucion =
                     indiceFinal < indiceInicial ? 'mejora' :
-                    indiceFinal > indiceInicial ? 'empeora' : 'sinCambios';
-    
-                evolucionDiagnosticos[diagnosticoInicial][evolucion]++;
+                        indiceFinal > indiceInicial ? 'empeora' : 'sinCambios';
+
+                // Verificar si evolucionDiagnosticos[diagnosticoInicial] existe antes de intentar acceder a sus propiedades
+                if (evolucionDiagnosticos[diagnosticoInicial]) {
+                    evolucionDiagnosticos[diagnosticoInicial][evolucion]++;
+                } else {
+                    evolucionDiagnosticos[diagnosticoInicial] = { mejora: 0, empeora: 0, sinCambios: 0 };
+                    evolucionDiagnosticos[diagnosticoInicial][evolucion]++;
+                }
             }
         });
-    
-        return { 
+
+        return {
             diagnosticosIniciales,
             diagnosticosFinales,
             evolucionDiagnosticos,
@@ -343,18 +349,18 @@ const obtenerEvolucionDiagnosticosInfantiles = async (year, semestreFiltro) => {
             totalReevaluaciones: reevaluaciones.length
         };
     };
-    
+
     // Si es "Todos los Años", devolver resultados por año
     const resultadosPorAno = await Promise.all(
         anosUnicos.map(async (ano) => {
-            const { 
-                diagnosticosIniciales, 
-                diagnosticosFinales, 
-                evolucionDiagnosticos, 
-                totalFichasIniciales, 
-                totalReevaluaciones 
+            const {
+                diagnosticosIniciales,
+                diagnosticosFinales,
+                evolucionDiagnosticos,
+                totalFichasIniciales,
+                totalReevaluaciones
             } = await obtenerDiagnosticosInfantiles(ano);
-    
+
             return {
                 year: ano,
                 diagnosticosIniciales,
@@ -365,7 +371,6 @@ const obtenerEvolucionDiagnosticosInfantiles = async (year, semestreFiltro) => {
             };
         })
     );
-    
     return resultadosPorAno;
 };
 
@@ -509,10 +514,10 @@ const obtenerEvolucionDiagnosticosAdultos = async (year, semestreFiltro) => {
                     fechaInicial: fichaInicial.createdAt,
                     fechaFinal: ultimaFicha.createdAt
                 });
-    
+
                 // Conteo de diagnósticos
                 diagnosticosCounts[diagnosticoInicial] = (diagnosticosCounts[diagnosticoInicial] || 0) + 1;
-    
+
                 // Inicializar estructura de evolución
                 if (!estadisticasEvolucion[diagnosticoInicial]) {
                     estadisticasEvolucion[diagnosticoInicial] = {
@@ -525,31 +530,31 @@ const obtenerEvolucionDiagnosticosAdultos = async (year, semestreFiltro) => {
                         distribucionFinal: {}
                     };
                 }
-    
+
                 // Calcular evolución
                 const cambio = compararHbA1c(
-                    fichaInicial.valor_hbac1, 
+                    fichaInicial.valor_hbac1,
                     ultimaFicha.valor_hbac1
                 );
-    
+
                 estadisticasEvolucion[diagnosticoInicial].total++;
                 estadisticasEvolucion[diagnosticoInicial].evolucion[
                     cambio === 'mejora' ? 'mejora' :
-                    cambio === 'empeora' ? 'empeora' : 'sinCambios'
+                        cambio === 'empeora' ? 'empeora' : 'sinCambios'
                 ]++;
-    
+
                 // Distribución de diagnósticos finales
-                estadisticasEvolucion[diagnosticoInicial].distribucionFinal[diagnosticoFinal] = 
+                estadisticasEvolucion[diagnosticoInicial].distribucionFinal[diagnosticoFinal] =
                     (estadisticasEvolucion[diagnosticoInicial].distribucionFinal[diagnosticoFinal] || 0) + 1;
             }
         });
-    
+
         // Convertir a array y ordenar
         const diagnosticos = Object.entries(diagnosticosCounts).map(([nombre, total]) => {
-            const evolucion = estadisticasEvolucion[nombre] || { 
-                total: 0, 
-                evolucion: { mejora: 0, empeora: 0, sinCambios: 0 }, 
-                distribucionFinal: {} 
+            const evolucion = estadisticasEvolucion[nombre] || {
+                total: 0,
+                evolucion: { mejora: 0, empeora: 0, sinCambios: 0 },
+                distribucionFinal: {}
             };
             return { nombre, total, evolucion };
         });
@@ -605,7 +610,7 @@ const obtenerEvolucionReevaluaciones = async (year, semestreFiltro) => {
         if (semestreFiltro === 'primero') {
             whereCondition.createdAt = {
                 [Op.gte]: moment(`${ano}-01-01`).startOf('day').toDate(),
-                [Op.lte]: moment(`${ano}-06-30`). endOf('day').toDate()
+                [Op.lte]: moment(`${ano}-06-30`).endOf('day').toDate()
             };
         } else if (semestreFiltro === 'segundo') {
             whereCondition.createdAt = {
@@ -624,7 +629,7 @@ const obtenerEvolucionReevaluaciones = async (year, semestreFiltro) => {
             raw: true
         });
 
-        return resultados.length > 0 
+        return resultados.length > 0
             ? { year: ano, totalReevaluaciones: resultados[0].totalReevaluaciones }
             : { year: ano, totalReevaluaciones: 0 };
     };
@@ -640,7 +645,7 @@ const obtenerEvolucionReevaluaciones = async (year, semestreFiltro) => {
 
 export const obtenerEstadisticasDashboard = async (req, res) => {
     try {
-        const { 
+        const {
             year = currentYear,  // Año por defecto es el año actual
             semestre,            // Opcional: 'primero', 'segundo'
             institucionId        // Opcional: filtrar por institución
@@ -648,7 +653,7 @@ export const obtenerEstadisticasDashboard = async (req, res) => {
 
         // Definir rango de fechas
         let inicioDb, finDb;
-        
+
         if (year === 0) {
             // Si es "Todos los Años", obtener desde 5 años antes hasta el año actual
             inicioDb = moment().subtract(5, 'years').startOf('year').toDate();
@@ -754,11 +759,11 @@ export const obtenerEstadisticasDashboard = async (req, res) => {
                 let diagnostico;
 
                 if (tipo === 'adulto') {
-                    diagnostico = ficha.diagnostico_id 
-                        ? ficha['diagnostico.nombre'] 
+                    diagnostico = ficha.diagnostico_id
+                        ? ficha['diagnostico.nombre']
                         : (ficha.diagnostico_otro || 'Sin Diagnóstico');
                 } else {
-                    diagnostico = ficha.diagnostico_dsm || 'Sin Diagnóstico DSM';
+                    diagnostico = ficha.diagnostico_tepsi || 'Sin Diagnóstico DSM';
                 }
 
                 acc[diagnostico] = (acc[diagnostico] || 0) + 1;
@@ -774,23 +779,23 @@ export const obtenerEstadisticasDashboard = async (req, res) => {
         const obtenerEstadisticasEvolutivas = async () => {
             // Puedes implementar lógica similar a tus métodos existentes de evolución
             const evolucionPacientes = await obtenerEvolucionPacientes(
-                year === 0 ? null : Number(year), 
+                year === 0 ? null : Number(year),
                 semestre
             );
 
             const evolucionDiagnosticos = {
                 adultos: await obtenerEvolucionDiagnosticosAdultos(
-                    year === 0 ? null : Number(year), 
+                    year === 0 ? null : Number(year),
                     semestre
                 ),
                 infantiles: await obtenerEvolucionDiagnosticosInfantiles(
-                    year === 0 ? null : Number(year), 
+                    year === 0 ? null : Number(year),
                     semestre
                 )
             };
 
             const evolucionReevaluaciones = await obtenerEvolucionReevaluaciones(
-                year === 0 ? null : Number(year), 
+                year === 0 ? null : Number(year),
                 semestre
             );
 
@@ -801,7 +806,7 @@ export const obtenerEstadisticasDashboard = async (req, res) => {
             };
         };
 
-        
+
         const estadisticasGenerales = await obtenerEstadisticasGenerales();
         const diagnosticosInfantiles = await obtenerDiagnosticosPorTipo(FichaClinicaInfantil, 'infantil');
         const diagnosticosAdultos = await obtenerDiagnosticosPorTipo(FichaClinicaAdulto, 'adulto');
@@ -821,20 +826,20 @@ export const obtenerEstadisticasDashboard = async (req, res) => {
         });
     } catch (error) {
         console.error('Error al obtener estadísticas del dashboard:', error);
-        res.status(500).json({ 
-            error: 'No se pudieron obtener las estadísticas del dashboard', 
-            detalle: error.message 
+        res.status(500).json({
+            error: 'No se pudieron obtener las estadísticas del dashboard',
+            detalle: error.message
         });
     }
 };
 
 export const obtenerDatosDashboard = async (req, res) => {
     try {
-        const { 
+        const {
             year = currentYear,
             semestre: semestreFiltro,
             institucionId,
-            fechaInicio: inicioParam, 
+            fechaInicio: inicioParam,
             fechaFin: finParam
         } = req.query;
 
@@ -905,7 +910,7 @@ export const obtenerDatosDashboard = async (req, res) => {
         const idsInstitucionesInfantiles = institucionesInfantiles.map(i => i.id);
 
         const institucionesAdultos = await Institucion.findAll({
-            where: { 
+            where: {
                 tipo_id: {
                     [Op.in]: [2, 3] // CESFAM y POSTAS
                 }
@@ -914,213 +919,178 @@ export const obtenerDatosDashboard = async (req, res) => {
         });
         const idsInstitucionesAdultos = institucionesAdultos.map(i => i.id);
 
-        // Lógica para manejar los semestres
-        let filtroTipoInstitucion = {};
-
-        if (semestreFiltro === 'primero') {
-            // Primer semestre: solo Jardines Infantiles (tipo 1)
-            filtroTipoInstitucion = { tipo_id: 1 };
-        } else if (semestreFiltro === 'segundo') {
-            // Segundo semestre: CESFAM y POSTAS (tipos 2 y 3)
-            filtroTipoInstitucion = { 
+        // CAMBIO PRINCIPAL: Obtener todas las instituciones sin filtrar por semestre
+        const todasLasInstituciones = await Institucion.findAll({
+            where: {
                 tipo_id: {
-                    [Op.in]: [2, 3]  // CESFAM y POSTAS
+                    [Op.in]: [1, 2, 3] // Todos los tipos
                 }
-            };
-        } else {
-            // Sin filtro de tipo de institución cuando no hay semestre específico
-            filtroTipoInstitucion = {}; 
-        }
-
-        // Obtener IDs de instituciones según el filtro de semestre
-        const institucionesPermitidas = await Institucion.findAll({
-            where: filtroTipoInstitucion,
+            },
             attributes: ['id']
         });
-        const idsInstitucionesPermitidas = institucionesPermitidas.map(i => i.id);
+        const idsTodasLasInstituciones = todasLasInstituciones.map(i => i.id);
 
-        // Modificar filtros de institución
-        const filtrosInstitucion = institucionId 
-        ? { institucion_id: institucionId }
-        : (
-            semestreFiltro === 'primero' 
-                ? { institucion_id: { [Op.in]: idsInstitucionesInfantiles } }
-                : semestreFiltro === 'segundo'
-                    ? { institucion_id: { [Op.in]: idsInstitucionesAdultos } }
-                    : {}
-        );
+        // Modificar filtros de institución - AHORA NO DEPENDE DEL SEMESTRE
+        const filtrosInstitucion = institucionId
+            ? { institucion_id: institucionId }
+            : {}; // Sin restricción por tipo de institución
 
-    // En la función obtenerUltimoDiagnosticoPorPaciente
-    const obtenerUltimoDiagnosticoPorPaciente = async (modelo, tipo, porAno = false) => {
-        // Determinar el rango de fechas según los filtros
-        const obtenerRangoFechas = () => {
-            if (year === 0 || year === '0') {
-                // Para "Todos los años" (últimos 5 años)
-                const primerAno = Math.max(currentYear - 5, 2020);
-                
-                if (semestreFiltro === 'primero') {
+        // En la función obtenerUltimoDiagnosticoPorPaciente
+        const obtenerUltimoDiagnosticoPorPaciente = async (modelo, tipo, porAno = false) => {
+            // Determinar el rango de fechas según los filtros
+            const obtenerRangoFechas = () => {
+                if (year === 0 || year === '0') {
+                    // Para "Todos los años" (últimos 5 años)
+                    const primerAno = Math.max(currentYear - 5, 2020);
+
+                    if (semestreFiltro === 'primero') {
+                        return {
+                            [Op.between]: [
+                                moment(`${primerAno}-01-01`).startOf('day').toDate(),
+                                moment(`${currentYear}-06-30`).endOf('day').toDate()
+                            ]
+                        };
+                    } else if (semestreFiltro === 'segundo') {
+                        return {
+                            [Op.between]: [
+                                moment(`${primerAno}-07-01`).startOf('day').toDate(),
+                                moment(`${currentYear}-12-31`).endOf('day').toDate()
+                            ]
+                        };
+                    }
+
                     return {
                         [Op.between]: [
                             moment(`${primerAno}-01-01`).startOf('day').toDate(),
-                            moment(`${currentYear}-06-30`).endOf('day').toDate()
+                            moment(`${currentYear}-12-31`).endOf('day').toDate()
+                        ]
+                    };
+                }
+
+                // Para filtrado por semestre en un año específico
+                if (semestreFiltro === 'primero') {
+                    return {
+                        [Op.between]: [
+                            moment(`${year}-01-01`).startOf('day').toDate(),
+                            moment(`${year}-06-30`).endOf('day').toDate()
                         ]
                     };
                 } else if (semestreFiltro === 'segundo') {
                     return {
                         [Op.between]: [
-                            moment(`${primerAno}-07-01`).startOf('day').toDate(),
-                            moment(`${currentYear}-12-31`).endOf('day').toDate()
+                            moment(`${year}-07-01`).startOf('day').toDate(),
+                            moment(`${year}-12-31`).endOf('day').toDate()
                         ]
                     };
                 }
-    
-                return {
-                    [Op.between]: [
-                        moment(`${primerAno}-01-01`).startOf('day').toDate(),
-                        moment(`${currentYear}-12-31`).endOf('day').toDate()
-                    ]
-                };
-            }
-    
-            // Para filtrado por semestre en un año específico
-            if (semestreFiltro === 'primero') {
+
+                // Para año específico sin semestre
                 return {
                     [Op.between]: [
                         moment(`${year}-01-01`).startOf('day').toDate(),
-                        moment(`${year}-06-30`).endOf('day').toDate()
-                    ]
-                };
-            } else if (semestreFiltro === 'segundo') {
-                return {
-                    [Op.between]: [
-                        moment(`${year}-07-01`).startOf('day').toDate(),
                         moment(`${year}-12-31`).endOf('day').toDate()
                     ]
                 };
-            }
-    
-            // Para año específico sin semestre
-            return {
-                [Op.between]: [
-                    moment(`${year}-01-01`).startOf('day').toDate(),
-                    moment(`${year}-12-31`).endOf('day').toDate()
-                ]
             };
-        };
-    
-        // Determinar filtro de institución según el tipo y semestre
-        const obtenerFiltroInstitucion = () => {
-            if (institucionId) {
-                return { institucion_id: institucionId };
-            }
-    
-            // Filtrar por tipo de institución según el semestre
-            if (semestreFiltro === 'primero') {
-                return {
-                    institucion_id: {
-                        [Op.in]: idsInstitucionesInfantiles
-                    }
-                };
-            } else if (semestreFiltro === 'segundo') {
-                return {
-                    institucion_id: {
-                        [Op.in]: idsInstitucionesAdultos
-                    }
-                };
-            }
-    
-            // Sin filtro de semestre, usar el tipo
-            return {
-                institucion_id: {
-                    [Op.in]: tipo === 'infantil'
-                        ? idsInstitucionesInfantiles
-                        : tipo === 'adulto'
-                            ? idsInstitucionesAdultos
-                            : []
+
+            // Determinar filtro de institución según el tipo y semestre
+            const obtenerFiltroInstitucion = () => {
+                if (institucionId) {
+                    return { institucion_id: institucionId };
                 }
+
+                // Sin filtro de semestre, usar el tipo
+                return {
+                    institucion_id: {
+                        [Op.in]: tipo === 'infantil'
+                            ? idsInstitucionesInfantiles
+                            : tipo === 'adulto'
+                                ? idsInstitucionesAdultos
+                                : []
+                    }
+                };
             };
-        };
-    
-        // Consulta principal para obtener los últimos diagnósticos
-        const subquery = await modelo.findAll({
-            attributes: [
-                'paciente_id',
-                [sequelize.fn('MAX', sequelize.col('createdAt')), 'ultima_fecha']
-            ],
-            where: {
-                createdAt: obtenerRangoFechas(),
-                ...obtenerFiltroInstitucion()
-            },
-            group: ['paciente_id'],
-            raw: true
-        });
-    
-        // Obtener detalles de las últimas fichas
-        const ultimosDiagnosticos = await Promise.all(subquery.map(async (item) => {
-            const ultimaFicha = await modelo.findOne({
+
+            // Consulta principal para obtener los últimos diagnósticos
+            const subquery = await modelo.findAll({
+                attributes: [
+                    'paciente_id',
+                    [sequelize.fn('MAX', sequelize.col('createdAt')), 'ultima_fecha']
+                ],
                 where: {
-                    paciente_id: item.paciente_id,
-                    createdAt: item.ultima_fecha
+                    createdAt: obtenerRangoFechas(),
+                    ...obtenerFiltroInstitucion()
                 },
-                ...(modelo.name === 'FichaClinicaAdulto' ? {
-                    include: [{
-                        model: Diagnostico,
-                        as: 'diagnostico',
-                        attributes: ['nombre']
-                    }]
-                } : {}),
+                group: ['paciente_id'],
                 raw: true
             });
-    
-            return ultimaFicha;
-        }));
-    
-        // Contar diagnósticos según el tipo de ficha
-        const contadorDiagnosticos = await (async () => {
-            if (modelo.name === 'FichaClinicaAdulto') {
-                const diagnosticosFichas = await DiagnosticoFichaAdulto.findAll({
-                    include: [
-                        {
+
+            // Obtener detalles de las últimas fichas
+            const ultimosDiagnosticos = await Promise.all(subquery.map(async (item) => {
+                const ultimaFicha = await modelo.findOne({
+                    where: {
+                        paciente_id: item.paciente_id,
+                        createdAt: item.ultima_fecha
+                    },
+                    ...(modelo.name === 'FichaClinicaAdulto' ? {
+                        include: [{
                             model: Diagnostico,
-                            as: 'Diagnostico',
+                            as: 'diagnostico',
                             attributes: ['nombre']
-                        },
-                        {
-                            model: FichaClinicaAdulto,
-                            as: 'FichaClinicaAdulto',
-                            where: {
-                                paciente_id: { [Op.in]: subquery.map(item => item.paciente_id) },
-                                createdAt: obtenerRangoFechas()
-                            }
-                        }
-                    ],
+                        }]
+                    } : {}),
                     raw: true
                 });
-    
-                return diagnosticosFichas.reduce((acc, diagnostico) => {
-                    const nombreDiagnostico = diagnostico.es_diagnostico_otro
-                        ? 'Otros'
-                        : (diagnostico['Diagnostico.nombre'] || 'Sin Diagnóstico');
-                    acc[nombreDiagnostico] = (acc[nombreDiagnostico] || 0) + 1;
-                    return acc;
-                }, {});
-            } else {
-                return ultimosDiagnosticos.reduce((acc, ficha) => {
-                    let diagnostico = ficha.diagnostico_dsm || 'Sin Diagnóstico DSM';
-                    acc[diagnostico] = (acc[diagnostico] || 0) + 1;
-                    return acc;
-                }, {});
-            }
-        })();
-    
-        // Ordenar resultados por cantidad
-        return Object.entries(contadorDiagnosticos)
-            .map(([nombre, cantidad]) => ({
-                nombre,
-                cantidad
-            }))
-            .sort((a, b) => b.cantidad - a.cantidad);
-    };
+
+                return ultimaFicha;
+            }));
+
+            // Contar diagnósticos según el tipo de ficha
+            const contadorDiagnosticos = await (async () => {
+                if (modelo.name === 'FichaClinicaAdulto') {
+                    const diagnosticosFichas = await DiagnosticoFichaAdulto.findAll({
+                        include: [
+                            {
+                                model: Diagnostico,
+                                as: 'Diagnostico',
+                                attributes: ['nombre']
+                            },
+                            {
+                                model: FichaClinicaAdulto,
+                                as: 'FichaClinicaAdulto',
+                                where: {
+                                    paciente_id: { [Op.in]: subquery.map(item => item.paciente_id) },
+                                    createdAt: obtenerRangoFechas()
+                                }
+                            }
+                        ],
+                        raw: true
+                    });
+
+                    return diagnosticosFichas.reduce((acc, diagnostico) => {
+                        const nombreDiagnostico = diagnostico.es_diagnostico_otro
+                            ? 'Otros'
+                            : (diagnostico['Diagnostico.nombre'] || 'Sin Diagnóstico');
+                        acc[nombreDiagnostico] = (acc[nombreDiagnostico] || 0) + 1;
+                        return acc;
+                    }, {});
+                } else {
+                    return ultimosDiagnosticos.reduce((acc, ficha) => {
+                        let diagnostico = ficha.diagnostico_tepsi || 'Sin Diagnóstico DSM';
+                        acc[diagnostico] = (acc[diagnostico] || 0) + 1;
+                        return acc;
+                    }, {});
+                }
+            })();
+
+            // Ordenar resultados por cantidad
+            return Object.entries(contadorDiagnosticos)
+                .map(([nombre, cantidad]) => ({
+                    nombre,
+                    cantidad
+                }))
+                .sort((a, b) => b.cantidad - a.cantidad);
+        };
 
         const obtenerDiagnosticosPorAno = async (modelo, tipo) => {
             // Obtener años con registros
@@ -1135,8 +1105,8 @@ export const obtenerDatosDashboard = async (req, res) => {
                     },
                     ...(institucionId ? { institucion_id: institucionId } : {
                         institucion_id: {
-                            [Op.in]: tipo === 'infantil' 
-                                ? idsInstitucionesInfantiles 
+                            [Op.in]: tipo === 'infantil'
+                                ? idsInstitucionesInfantiles
                                 : tipo === 'adulto'
                                     ? idsInstitucionesAdultos
                                     : []
@@ -1161,7 +1131,7 @@ export const obtenerDatosDashboard = async (req, res) => {
                 order: [['year', 'ASC']],
                 raw: true
             });
-        
+
             const resultados = await Promise.all(anosRegistrados.map(async (ano) => {
                 // Condiciones para el año actual
                 const whereCondition = {
@@ -1171,30 +1141,32 @@ export const obtenerDatosDashboard = async (req, res) => {
                     },
                     ...(institucionId ? { institucion_id: institucionId } : {
                         institucion_id: {
-                            [Op.in]: tipo === 'infantil' 
-                                ? idsInstitucionesInfantiles 
+                            [Op.in]: tipo === 'infantil'
+                                ? idsInstitucionesInfantiles
                                 : tipo === 'adulto'
                                     ? idsInstitucionesAdultos
                                     : []
                         }
-                    }),
-                    ...(semestreFiltro === 'primero' ? {
-                        createdAt: {
-                            [Op.between]: [
-                                moment(`${ano.year}-01-01`).startOf('day').toDate(),
-                                moment(`${ano.year}-06-30`).endOf('day').toDate()
-                            ]
-                        }
-                    } : semestreFiltro === 'segundo' ? {
-                        createdAt: {
-                            [Op.between]: [
-                                moment(`${ano.year}-07-01`).startOf('day').toDate(),
-                                moment(`${ano.year}-12-31`).endOf('day').toDate()
-                            ]
-                        }
-                    } : {})
+                    })
                 };
-        
+
+                // Aplicar filtro de semestre solo a las fechas, no al tipo de institución
+                if (semestreFiltro === 'primero') {
+                    whereCondition.createdAt = {
+                        [Op.between]: [
+                            moment(`${ano.year}-01-01`).startOf('day').toDate(),
+                            moment(`${ano.year}-06-30`).endOf('day').toDate()
+                        ]
+                    };
+                } else if (semestreFiltro === 'segundo') {
+                    whereCondition.createdAt = {
+                        [Op.between]: [
+                            moment(`${ano.year}-07-01`).startOf('day').toDate(),
+                            moment(`${ano.year}-12-31`).endOf('day').toDate()
+                        ]
+                    };
+                }
+
                 // Obtener pacientes únicos con sus últimas fichas (reevaluación o inicial)
                 const ultimasFichasPorPaciente = await modelo.findAll({
                     attributes: [
@@ -1205,7 +1177,7 @@ export const obtenerDatosDashboard = async (req, res) => {
                     group: ['paciente_id'],
                     raw: true
                 });
-        
+
                 // Obtener detalles de las últimas fichas
                 const diagnosticos = await Promise.all(
                     ultimasFichasPorPaciente.map(async (registro) => {
@@ -1225,7 +1197,7 @@ export const obtenerDatosDashboard = async (req, res) => {
                             } : {}),
                             raw: true
                         });
-        
+
                         // Si no hay reevaluación, buscar ficha inicial
                         if (!ultimaFicha) {
                             ultimaFicha = await modelo.findOne({
@@ -1244,15 +1216,15 @@ export const obtenerDatosDashboard = async (req, res) => {
                                 raw: true
                             });
                         }
-        
+
                         return ultimaFicha;
                     })
                 );
-        
+
                 // Contar diagnósticos
                 const contadorDiagnosticos = diagnosticos.reduce((acc, ficha) => {
                     let diagnostico;
-        
+
                     // Para FichaClinicaAdulto
                     if (modelo.name === 'FichaClinicaAdulto') {
                         if (ficha.diagnostico_id) {
@@ -1262,21 +1234,21 @@ export const obtenerDatosDashboard = async (req, res) => {
                         } else {
                             diagnostico = 'Sin Diagnóstico';
                         }
-                    } 
+                    }
                     // Para FichaClinicaInfantil
                     else {
-                        diagnostico = ficha.diagnostico_dsm || 'Sin Diagnóstico DSM';
+                        diagnostico = ficha.diagnostico_tepsi || 'Sin Diagnóstico TEPSI';
                     }
-        
+
                     if (diagnostico) {
                         acc[diagnostico] = (acc[diagnostico] || 0) + 1;
                     } else {
                         acc['Sin Diagnóstico'] = (acc['Sin Diagnóstico'] || 0) + 1;
                     }
-        
+
                     return acc;
                 }, {});
-        
+
                 // Convertir a array ordenado
                 const diagnosticosArray = Object.entries(contadorDiagnosticos)
                     .map(([nombre, cantidad]) => ({
@@ -1284,23 +1256,22 @@ export const obtenerDatosDashboard = async (req, res) => {
                         cantidad
                     }))
                     .sort((a, b) => b.cantidad - a.cantidad);
-        
+
                 return {
                     year: ano.year,
                     diagnosticos: diagnosticosArray
                 };
             }));
-        
+
             return resultados;
         };
 
-        const diagnosticosInfantiles = year === 0 
-            ? await obtenerDiagnosticosPorAno(FichaClinicaInfantil, 'infantil') 
+        const diagnosticosInfantiles = year === 0
+            ? await obtenerDiagnosticosPorAno(FichaClinicaInfantil, 'infantil')
             : await obtenerUltimoDiagnosticoPorPaciente(FichaClinicaInfantil, 'infantil');
 
-        const diagnosticosAdultos
-        = year === 0 
-            ? await obtenerDiagnosticosPorAno(FichaClinicaAdulto, 'adulto') 
+        const diagnosticosAdultos = year === 0
+            ? await obtenerDiagnosticosPorAno(FichaClinicaAdulto, 'adulto')
             : await obtenerUltimoDiagnosticoPorPaciente(FichaClinicaAdulto, 'adulto');
 
         // En la consulta de fichasInfantiles
@@ -1320,9 +1291,9 @@ export const obtenerDatosDashboard = async (req, res) => {
                     ]
                 },
                 is_reevaluacion: 0,
-                ...(institucionId 
-                    ? { institucion_id: institucionId } 
-                    : (semestreFiltro 
+                ...(institucionId
+                    ? { institucion_id: institucionId }
+                    : (semestreFiltro
                         ? { institucion_id: { [Op.in]: idsInstitucionesInfantiles } }
                         : {}) // Sin filtro si no hay semestre
                 )
@@ -1340,22 +1311,13 @@ export const obtenerDatosDashboard = async (req, res) => {
                 [sequelize.fn('COUNT', sequelize.literal('DISTINCT CASE WHEN is_reevaluacion = 1 THEN paciente_id END')), 'pacientesReevaluados']
             ],
             where: {
-                ...aplicarFiltrosTiempo().where,
-                ...(institucionId ? { institucion_id: institucionId } : (
-                    semestreFiltro === 'primero' ? {
-                        createdAt: {
-                            [Op.between]: [`${year}-01-01`, `${year}-06-30`]
-                        },
-                        institucion_id: { [Op.in]: idsInstitucionesInfantiles }
-                    } : semestreFiltro === 'segundo' ? {
-                        createdAt: {
-                            [Op.between]: [`${year}-07-01`, `${year}-12-31`]
-                        },
-                        institucion_id: { [Op.in]: idsInstitucionesAdultos }
-                    } : {
-                        institucion_id: { [Op.in]: idsInstitucionesAdultos }
-                    }
-                ))
+                createdAt: {
+                    [Op.between]: [inicioDb, finDb]
+                },
+                ...(institucionId
+                    ? { institucion_id: institucionId }
+                    : { institucion_id: { [Op.in]: idsInstitucionesAdultos } }
+                )
             },
             raw: true
         });
@@ -1365,7 +1327,7 @@ export const obtenerDatosDashboard = async (req, res) => {
             where: {
                 estado: { [Op.in]: [0, 1] },
                 anos_cursados: { [Op.not]: null, [Op.ne]: '' },
-                ...(year === 0 || year === '0' 
+                ...(year === 0 || year === '0'
                     ? {} // No aplicar filtro si year es 0
                     : {
                         [Op.and]: [
@@ -1378,8 +1340,8 @@ export const obtenerDatosDashboard = async (req, res) => {
 
         const estudiantesAsignados = await Asignacion.findAll({
             attributes: [
-                [sequelize.fn('COUNT', 
-                    sequelize.fn('DISTINCT', 
+                [sequelize.fn('COUNT',
+                    sequelize.fn('DISTINCT',
                         sequelize.literal('CONCAT(Asignacion.estudiante_id, "-", YEAR(Asignacion.fecha_inicio))')
                     )
                 ), 'total']
@@ -1399,14 +1361,14 @@ export const obtenerDatosDashboard = async (req, res) => {
                 required: true // Importante: convierte a INNER JOIN
             }],
             // Lógica de filtrado para "Todos los años" y semestres
-            ...(year === 0 
-                ? (semestreFiltro === 'primero' 
+            ...(year === 0
+                ? (semestreFiltro === 'primero'
                     ? {
                         where: {
                             fecha_inicio: {
                                 [Op.and]: [
                                     Sequelize.where(
-                                        Sequelize.fn('MONTH', Sequelize.col('Asignacion.fecha_inicio')), 
+                                        Sequelize.fn('MONTH', Sequelize.col('Asignacion.fecha_inicio')),
                                         { [Op.between]: [1, 6] }
                                     )
                                 ]
@@ -1414,28 +1376,28 @@ export const obtenerDatosDashboard = async (req, res) => {
                         }
                     }
                     : semestreFiltro === 'segundo'
-                    ? {
-                        where: {
-                            fecha_inicio: {
-                                [Op.and]: [
-                                    Sequelize.where(
-                                        Sequelize.fn('MONTH', Sequelize.col('Asignacion.fecha_inicio')), 
-                                        { [Op.between]: [7, 12] }
-                                    )
-                                ]
+                        ? {
+                            where: {
+                                fecha_inicio: {
+                                    [Op.and]: [
+                                        Sequelize.where(
+                                            Sequelize.fn('MONTH', Sequelize.col('Asignacion.fecha_inicio')),
+                                            { [Op.between]: [7, 12] }
+                                        )
+                                    ]
+                                }
                             }
                         }
-                    }
-                    : {} // Sin filtro si no hay semestre específico
+                        : {} // Sin filtro si no hay semestre específico
                 )
-                : (semestreFiltro === 'primero' 
+                : (semestreFiltro === 'primero'
                     ? {
                         where: {
                             fecha_inicio: {
                                 [Op.and]: [
                                     { [Op.between]: [inicioDb, finDb] },
                                     Sequelize.where(
-                                        Sequelize.fn('MONTH', Sequelize.col('Asignacion.fecha_inicio')), 
+                                        Sequelize.fn('MONTH', Sequelize.col('Asignacion.fecha_inicio')),
                                         { [Op.between]: [1, 6] }
                                     )
                                 ]
@@ -1443,328 +1405,320 @@ export const obtenerDatosDashboard = async (req, res) => {
                         }
                     }
                     : semestreFiltro === 'segundo'
-                    ? {
-                        where: {
-                            fecha_inicio: {
-                                [Op.and]: [
-                                    { [Op.between]: [inicioDb, finDb] },
-                                    Sequelize.where(
-                                        Sequelize.fn('MONTH', Sequelize.col('Asignacion.fecha_inicio')), 
-                                        { [Op.between]: [7, 12] }
-                                    )
-                                ]
+                        ? {
+                            where: {
+                                fecha_inicio: {
+                                    [Op.and]: [
+                                        { [Op.between]: [inicioDb, finDb] },
+                                        Sequelize.where(
+                                            Sequelize.fn('MONTH', Sequelize.col('Asignacion.fecha_inicio')),
+                                            { [Op.between]: [7, 12] }
+                                        )
+                                    ]
+                                }
                             }
                         }
-                    }
-                    : {
-                        where: {
-                            fecha_inicio: {
-                                [Op.between]: [inicioDb, finDb]
+                        : {
+                            where: {
+                                fecha_inicio: {
+                                    [Op.between]: [inicioDb, finDb]
+                                }
                             }
                         }
-                    }
                 )
             ),
             raw: true
         });
 
-    // Estadísticas por Institución
-    const estadisticasPorInstitucion = await Institucion.findAll({
-    attributes: [
-        'id', 
-        'nombre',
-        [
-            sequelize.literal(`(
+        // Estadísticas por Institución
+        const estadisticasPorInstitucion = await Institucion.findAll({
+            attributes: [
+                'id',
+                'nombre',
+                [
+                    sequelize.literal(`(
                 SELECT COUNT(DISTINCT paciente_id)
                 FROM fichas_clinicas_adultos 
                 WHERE institucion_id = Institucion.id 
                 AND is_reevaluacion = 0
                 AND createdAt BETWEEN :fechaInicio AND :fechaFin
-                ${semestreFiltro ? 'AND createdAt BETWEEN :inicioSemestre AND :finSemestre' : ''}
             )`),
-            'fichasInicialesAdultos'
-        ],
-        [
-            sequelize.literal(`(
+                    'fichasInicialesAdultos'
+                ],
+                [
+                    sequelize.literal(`(
                 SELECT COUNT(DISTINCT paciente_id)
                 FROM fichas_clinicas_adultos 
                 WHERE institucion_id = Institucion.id 
                 AND is_reevaluacion = 1
                 AND createdAt BETWEEN :fechaInicio AND :fechaFin
             )`),
-            'reevaluacionesAdultos'
-        ],
-        [
-            sequelize.literal(`(
+                    'reevaluacionesAdultos'
+                ],
+                [
+                    sequelize.literal(`(
                 SELECT COUNT(DISTINCT paciente_id)
                 FROM fichas_clinicas_infantiles 
                 WHERE institucion_id = Institucion.id 
                 AND is_reevaluacion = 0
                 AND createdAt BETWEEN :fechaInicio AND :fechaFin
             )`),
-            'fichasInicialesInfantiles'
-        ],
-        [
-            sequelize.literal(`(
+                    'fichasInicialesInfantiles'
+                ],
+                [
+                    sequelize.literal(`(
                 SELECT COUNT(DISTINCT paciente_id)
                 FROM fichas_clinicas_infantiles 
                 WHERE institucion_id = Institucion.id 
                 AND is_reevaluacion = 1
                 AND createdAt BETWEEN :fechaInicio AND :fechaFin
             )`),
-            'reevaluacionesInfantiles'
-        ]
-    ],
-    include: [{
-        model: TipoInstitucion,
-        as: 'tipoInstitucion',
-        attributes: ['tipo']
-    }],
-    replacements: {
-        fechaInicio: inicioDb,
-        fechaFin: finDb,
-        ...(semestreFiltro && {
-            inicioSemestre: semestreFiltro === 'primero' 
-                ? `${year}-01-01` 
-                : `${year}-07-01`,
-            finSemestre: semestreFiltro === 'primero' 
-                ? `${year}-06-30` 
-                : `${year}-12-31`
-        })
-    }
-});
-
-const obtenerDiagnosticosHistoricosAdultos = async () => {
-    // Subquery para obtener la última reevaluación de cada paciente
-    let subquery = await FichaClinicaAdulto.findAll({
-        attributes: [
-            'paciente_id',
-            [sequelize.fn('MAX', sequelize.col('id')), 'ultimaFichaId']
-        ],
-        where: {
-            is_reevaluacion: 1, // Solo reevaluaciones
-            createdAt: {
-                [Op.gte]: moment().subtract(5, 'years').startOf('year').toDate(),
-                [Op.lte]: moment().endOf('year').toDate()
-            }
-        },
-        group: ['paciente_id'],
-        raw: true
-    });
-
-    // Si no hay reevaluaciones, buscar la última ficha inicial
-    if (subquery.length === 0) {
-        subquery = await FichaClinicaAdulto.findAll({
-            attributes: [
-                'paciente_id',
-                [sequelize.fn('MAX', sequelize.col('id')), 'ultimaFichaId']
+                    'reevaluacionesInfantiles'
+                ]
             ],
-            where: {
-                is_reevaluacion: 0, // Solo fichas iniciales
-                createdAt: {
-                    [Op.gte]: moment().subtract(5, 'years').startOf('year').toDate(),
-                    [Op.lte]: moment().endOf('year').toDate()
-                }
-            },
-            group: ['paciente_id'],
-            raw: true
+            include: [{
+                model: TipoInstitucion,
+                as: 'tipoInstitucion',
+                attributes: ['tipo']
+            }],
+            where: institucionId ? { id: institucionId } : {},
+            replacements: {
+                fechaInicio: inicioDb,
+                fechaFin: finDb
+            }
         });
-    }
 
-    // Obtener los detalles de las últimas fichas
-    const ultimasFichas = await Promise.all(
-        subquery.map(async (item) => {
-            const ultimaFicha = await FichaClinicaAdulto.findOne({
+        const obtenerDiagnosticosHistoricosAdultos = async () => {
+            // Subquery para obtener la última reevaluación de cada paciente
+            let subquery = await FichaClinicaAdulto.findAll({
+                attributes: [
+                    'paciente_id',
+                    [sequelize.fn('MAX', sequelize.col('id')), 'ultimaFichaId']
+                ],
                 where: {
-                    id: item.ultimaFichaId
+                    is_reevaluacion: 1, // Solo reevaluaciones
+                    createdAt: {
+                        [Op.gte]: moment().subtract(5, 'years').startOf('year').toDate(),
+                        [Op.lte]: moment().endOf('year').toDate()
+                    }
                 },
-                include: [{
-                    model: Diagnostico,
-                    as: 'diagnostico',
-                    attributes: ['nombre']
-                }],
-                raw: false
+                group: ['paciente_id'],
+                raw: true
             });
 
-            return ultimaFicha;
-        })
-    );
-
-    // Agrupar diagnósticos por año
-    const diagnosticosPorAno = ultimasFichas.reduce((acc, ficha) => {
-        if (!ficha) return acc;
-
-        const year = ficha.createdAt.getFullYear();
-        const diagnostico = ficha.diagnostico 
-            ? ficha.diagnostico.nombre 
-            : (ficha.diagnostico_otro || 'Sin Diagnóstico');
-
-        if (!acc[year]) {
-            acc[year] = {};
-        }
-
-        acc[year][diagnostico] = (acc[year][diagnostico] || 0) + 1;
-        return acc;
-    }, {});
-
-    // Transformar a formato de array
-    const resultados = Object.entries(diagnosticosPorAno).flatMap(([year, diagnosticos]) => 
-        Object.entries(diagnosticos).map(([diagnostico, totalPacientes]) => ({
-            year: parseInt(year),
-            diagnostico,
-            totalPacientes
-        }))
-    ).sort((a, b) => a.year - b.year || b.totalPacientes - a.totalPacientes);
-
-    return resultados;
-};
-
-// Mismo enfoque para infantiles
-const obtenerDiagnosticosHistoricosInfantiles = async () => {
-    // Subquery para obtener la última reevaluación de cada paciente
-    let subquery = await FichaClinicaInfantil.findAll({
-        attributes: [
-            'paciente_id',
-            [sequelize.fn('MAX', sequelize.col('id')), 'ultimaFichaId']
-        ],
-        where: {
-            is_reevaluacion: 1, // Solo reevaluaciones
-            createdAt: {
-                [Op.gte]: moment().subtract(5, 'years').startOf('year').toDate(),
-                [Op.lte]: moment().endOf('year').toDate()
+            // Si no hay reevaluaciones, buscar la última ficha inicial
+            if (subquery.length === 0) {
+                subquery = await FichaClinicaAdulto.findAll({
+                    attributes: [
+                        'paciente_id',
+                        [sequelize.fn('MAX', sequelize.col('id')), 'ultimaFichaId']
+                    ],
+                    where: {
+                        is_reevaluacion: 0, // Solo fichas iniciales
+                        createdAt: {
+                            [Op.gte]: moment().subtract(5, 'years').startOf('year').toDate(),
+                            [Op.lte]: moment().endOf('year').toDate()
+                        }
+                    },
+                    group: ['paciente_id'],
+                    raw: true
+                });
             }
-        },
-        group: ['paciente_id'],
-        raw: true
-    });
 
-    // Si no hay reevaluaciones, buscar la última ficha inicial
-    if (subquery.length === 0) {
-        subquery = await FichaClinicaInfantil.findAll({
-            attributes: [
-                'paciente_id',
-                [sequelize.fn('MAX', sequelize.col('id')), 'ultimaFichaId']
-            ],
-            where: {
-                is_reevaluacion: 0, // Solo fichas iniciales
-                createdAt: {
-                    [Op.gte]: moment().subtract(5, 'years').startOf('year').toDate(),
-                    [Op.lte]: moment().endOf('year').toDate()
+            // Obtener los detalles de las últimas fichas
+            const ultimasFichas = await Promise.all(
+                subquery.map(async (item) => {
+                    const ultimaFicha = await FichaClinicaAdulto.findOne({
+                        where: {
+                            id: item.ultimaFichaId
+                        },
+                        include: [{
+                            model: Diagnostico,
+                            as: 'diagnostico',
+                            attributes: ['nombre']
+                        }],
+                        raw: false
+                    });
+
+                    return ultimaFicha;
+                })
+            );
+
+            // Agrupar diagnósticos por año
+            const diagnosticosPorAno = ultimasFichas.reduce((acc, ficha) => {
+                if (!ficha) return acc;
+
+                const year = ficha.createdAt.getFullYear();
+                const diagnostico = ficha.diagnostico
+                    ? ficha.diagnostico.nombre
+                    : (ficha.diagnostico_otro || 'Sin Diagnóstico');
+
+                if (!acc[year]) {
+                    acc[year] = {};
                 }
-            },
-            group: ['paciente_id'],
-            raw: true
-        });
-    }
 
-    // Obtener los detalles de las últimas fichas
-    const ultimasFichas = await Promise.all(
-        subquery.map(async (item) => {
-            const ultimaFicha = await FichaClinicaInfantil.findOne({
+                acc[year][diagnostico] = (acc[year][diagnostico] || 0) + 1;
+                return acc;
+            }, {});
+
+            // Transformar a formato de array
+            const resultados = Object.entries(diagnosticosPorAno).flatMap(([year, diagnosticos]) =>
+                Object.entries(diagnosticos).map(([diagnostico, totalPacientes]) => ({
+                    year: parseInt(year),
+                    diagnostico,
+                    totalPacientes
+                }))
+            ).sort((a, b) => a.year - b.year || b.totalPacientes - a.totalPacientes);
+
+            return resultados;
+        };
+
+        // Mismo enfoque para infantiles
+        const obtenerDiagnosticosHistoricosInfantiles = async () => {
+            // Subquery para obtener la última reevaluación de cada paciente
+            let subquery = await FichaClinicaInfantil.findAll({
+                attributes: [
+                    'paciente_id',
+                    [sequelize.fn('MAX', sequelize.col('id')), 'ultimaFichaId']
+                ],
                 where: {
-                    id: item.ultimaFichaId
+                    is_reevaluacion: 1, // Solo reevaluaciones
+                    createdAt: {
+                        [Op.gte]: moment().subtract(5, 'years').startOf('year').toDate(),
+                        [Op.lte]: moment().endOf('year').toDate()
+                    }
                 },
-                raw: false
+                group: ['paciente_id'],
+                raw: true
             });
 
-            return ultimaFicha;
-        })
-    );
+            // Si no hay reevaluaciones, buscar la última ficha inicial
+            if (subquery.length === 0) {
+                subquery = await FichaClinicaInfantil.findAll({
+                    attributes: [
+                        'paciente_id',
+                        [sequelize.fn('MAX', sequelize.col('id')), 'ultimaFichaId']
+                    ],
+                    where: {
+                        is_reevaluacion: 0, // Solo fichas iniciales
+                        createdAt: {
+                            [Op.gte]: moment().subtract(5, 'years').startOf('year').toDate(),
+                            [Op.lte]: moment().endOf('year').toDate()
+                        }
+                    },
+                    group: ['paciente_id'],
+                    raw: true
+                });
+            }
 
-    // Agrupar diagnósticos por año
-    const diagnosticosPorAno = ultimasFichas.reduce((acc, ficha) => {
-        if (!ficha) return acc;
+            // Obtener los detalles de las últimas fichas
+            const ultimasFichas = await Promise.all(
+                subquery.map(async (item) => {
+                    const ultimaFicha = await FichaClinicaInfantil.findOne({
+                        where: {
+                            id: item.ultimaFichaId
+                        },
+                        raw: false
+                    });
 
-        const year = ficha.createdAt.getFullYear();
-        const diagnostico = ficha.diagnostico_dsm || 'Sin Diagnóstico DSM';
+                    return ultimaFicha;
+                })
+            );
 
-        if (!acc[year]) {
-            acc[year] = {};
-        }
+            // Agrupar diagnósticos por año
+            const diagnosticosPorAno = ultimasFichas.reduce((acc, ficha) => {
+                if (!ficha) return acc;
 
-        acc[year][diagnostico] = (acc[year][diagnostico] || 0) + 1;
-        return acc;
-    }, {});
+                const year = ficha.createdAt.getFullYear();
+                const diagnostico = ficha.diagnostico_tepsi || 'Sin Diagnóstico DSM';
 
-    // Transformar a formato de array
-    const resultados = Object.entries(diagnosticosPorAno).flatMap(([year, diagnosticos]) => 
-        Object.entries(diagnosticos).map(([diagnostico, totalPacientes]) => ({
-            year: parseInt(year),
-            diagnostico,
-            totalPacientes
-        }))
-    ).sort((a, b) => a.year - b.year || b.totalPacientes - a.totalPacientes);
+                if (!acc[year]) {
+                    acc[year] = {};
+                }
 
-    return resultados;
-};
+                acc[year][diagnostico] = (acc[year][diagnostico] || 0) + 1;
+                return acc;
+            }, {});
 
-const historicosAdultos = await obtenerDiagnosticosHistoricosAdultos();
-const historicosInfantiles = await obtenerDiagnosticosHistoricosInfantiles();
+            // Transformar a formato de array
+            const resultados = Object.entries(diagnosticosPorAno).flatMap(([year, diagnosticos]) =>
+                Object.entries(diagnosticos).map(([diagnostico, totalPacientes]) => ({
+                    year: parseInt(year),
+                    diagnostico,
+                    totalPacientes
+                }))
+            ).sort((a, b) => a.year - b.year || b.totalPacientes - a.totalPacientes);
+
+            return resultados;
+        };
+
+        const historicosAdultos = await obtenerDiagnosticosHistoricosAdultos();
+        const historicosInfantiles = await obtenerDiagnosticosHistoricosInfantiles();
 
 
 
-// Obtener datos de tendencias
-const evolucionPacientes = await obtenerEvolucionPacientes(
-    year === 0 ? null : Number(year), 
-    semestreFiltro
-);
-const evolucionDiagnosticos = {
-    adultos: await obtenerEvolucionDiagnosticosAdultos(  // Necesitarás crear este método para adultos
-        year === 0 ? null : Number(year), 
-        semestreFiltro
-    ),
-    infantiles: await obtenerEvolucionDiagnosticosInfantiles(
-        year === 0 ? null : Number(year), 
-        semestreFiltro
-    )
-};
-const evolucionReevaluaciones = await obtenerEvolucionReevaluaciones(
-    year === 0 ? null : Number(year), 
-    semestreFiltro
-);
-    
-// Modificar la respuesta JSON para incluir el tipo de institución
-res.json({
-    pacientesAdultos: {
-        diagnosticos: diagnosticosAdultos,
-        fichas: fichasAdultos[0] || {}
-    },
-    pacientesInfantiles: {
-        diagnosticos: diagnosticosInfantiles,
-        fichas: fichasInfantiles[0] || {}
-    },
-    estudiantes: {
-        total: totalEstudiantes,
-        asignados: estudiantesAsignados
-    },
-    estadisticasPorInstitucion: estadisticasPorInstitucion.map(institucion => ({
-        id: institucion.id,
-        nombre: institucion.nombre,
-        tipoInstitucion: institucion.tipoInstitucion ? institucion.tipoInstitucion.tipo : 'Sin Tipo',
-        fichasInicialesAdultos: institucion.get('fichasInicialesAdultos'),
-        reevaluacionesAdultos: institucion.get('reevaluacionesAdultos'),
-        fichasInicialesInfantiles: institucion.get('fichasInicialesInfantiles'),
-        reevaluacionesInfantiles: institucion.get('reevaluacionesInfantiles')
-    })),
-    tendencias: {
-        evolucionPacientes,
-        evolucionDiagnosticos,
-        evolucionReevaluaciones
-    },
-    adultos: historicosAdultos,
-    infantiles: historicosInfantiles,
-    parametros: {
-        periodo: semestreFiltro,
-        fechaInicio: moment(inicioDb).tz('America/Santiago').format(),
-        fechaFin: moment(finDb).tz('America/Santiago').format(),
-        institucionId
-    }
-});
+        // Obtener datos de tendencias
+        const evolucionPacientes = await obtenerEvolucionPacientes(
+            year === 0 ? null : Number(year),
+            semestreFiltro
+        );
+        const evolucionDiagnosticos = {
+            adultos: await obtenerEvolucionDiagnosticosAdultos(  // Necesitarás crear este método para adultos
+                year === 0 ? null : Number(year),
+                semestreFiltro
+            ),
+            infantiles: await obtenerEvolucionDiagnosticosInfantiles(
+                year === 0 ? null : Number(year),
+                semestreFiltro
+            )
+        };
+        const evolucionReevaluaciones = await obtenerEvolucionReevaluaciones(
+            year === 0 ? null : Number(year),
+            semestreFiltro
+        );
+
+        // Modificar la respuesta JSON para incluir el tipo de institución
+        res.json({
+            pacientesAdultos: {
+                diagnosticos: diagnosticosAdultos,
+                fichas: fichasAdultos[0] || {}
+            },
+            pacientesInfantiles: {
+                diagnosticos: diagnosticosInfantiles,
+                fichas: fichasInfantiles[0] || {}
+            },
+            estudiantes: {
+                total: totalEstudiantes,
+                asignados: estudiantesAsignados
+            },
+            estadisticasPorInstitucion: estadisticasPorInstitucion.map(institucion => ({
+                id: institucion.id,
+                nombre: institucion.nombre,
+                tipoInstitucion: institucion.tipoInstitucion ? institucion.tipoInstitucion.tipo : 'Sin Tipo',
+                fichasInicialesAdultos: institucion.get('fichasInicialesAdultos'),
+                reevaluacionesAdultos: institucion.get('reevaluacionesAdultos'),
+                fichasInicialesInfantiles: institucion.get('fichasInicialesInfantiles'),
+                reevaluacionesInfantiles: institucion.get('reevaluacionesInfantiles')
+            })),
+            tendencias: {
+                evolucionPacientes,
+                evolucionDiagnosticos,
+                evolucionReevaluaciones
+            },
+            adultos: historicosAdultos,
+            infantiles: historicosInfantiles,
+            parametros: {
+                periodo: semestreFiltro,
+                fechaInicio: moment(inicioDb).tz('America/Santiago').format(),
+                fechaFin: moment(finDb).tz('America/Santiago').format(),
+                institucionId
+            }
+        });
     } catch (error) {
         console.error('Error al obtener datos del dashboard:', error);
-        res.status(500).json({ 
-            error: 'No se pudieron obtener los datos del dashboard', 
-            detalle: error.message 
+        res.status(500).json({
+            error: 'No se pudieron obtener los datos del dashboard',
+            detalle: error.message
         });
     }
 };
