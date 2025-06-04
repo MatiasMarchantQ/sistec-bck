@@ -625,7 +625,12 @@ export const createFichaClinicaInfantil = async (req, res) => {
                 await PadreTutor.create({
                     ficha_clinica_id: fichaClinica.id,
                     nombre: padre.nombre,
-                    escolaridad_id: padre.escolaridad && padre.escolaridad !== '' ? padre.escolaridad : null,
+                    escolaridad_id: (() => {
+                        if (typeof padre.escolaridad === 'object') {
+                            return padre.escolaridad?.id || null;
+                        }
+                        return padre.escolaridad && padre.escolaridad !== '' ? padre.escolaridad : null;
+                    })(),
                     ocupacion: padre.ocupacion
                 }, { transaction: t });
             }
@@ -2106,7 +2111,7 @@ export const updateFichaClinicaInfantil = async (req, res) => {
         // Actualizar datos de la ficha clínica
         await fichaClinica.update({
             con_quien_vive: conQuienVive,
-            ciclo_vital_familiar_id: cicloVitalFamiliar,
+            ciclo_vital_familiar_id: cicloVitalFamiliar && cicloVitalFamiliar !== '' ? cicloVitalFamiliar : null,
             localidad
         }, { transaction: t });
 
@@ -2560,7 +2565,7 @@ export const updateReevaluacionInfantil = async (req, res) => {
         // Actualizar datos de la ficha clínica infantil
         await reevaluacion.update({
             con_quien_vive: conQuienVive,
-            ciclo_vital_familiar_id: cicloVitalFamiliar,
+            ciclo_vital_familiar_id: cicloVitalFamiliar && cicloVitalFamiliar !== '' ? cicloVitalFamiliar : null,
             puntaje_dpm: puntajeDPM,
             diagnostico_tepsi: diagnosticoTEPSI,
             edad_mental: edadMental,
@@ -2599,7 +2604,7 @@ export const updateReevaluacionInfantil = async (req, res) => {
             PadreTutor.create({
                 ficha_clinica_id: id,
                 nombre: padre.nombre,
-                escolaridad_id: padre.escolaridad && padre.escolaridad !== '' ? padre.escolaridad : null,
+                escolaridad_id: (padre.escolaridad && padre.escolaridad.id) ? padre.escolaridad.id : null,
                 ocupacion: padre.ocupacion
             }, { transaction: t })
         );
