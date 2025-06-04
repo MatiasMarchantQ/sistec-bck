@@ -625,7 +625,7 @@ export const createFichaClinicaInfantil = async (req, res) => {
                 await PadreTutor.create({
                     ficha_clinica_id: fichaClinica.id,
                     nombre: padre.nombre,
-                    escolaridad_id: padre.escolaridad,
+                    escolaridad_id: padre.escolaridad && padre.escolaridad !== '' ? padre.escolaridad : null,
                     ocupacion: padre.ocupacion
                 }, { transaction: t });
             }
@@ -2200,7 +2200,7 @@ export const updateFichaClinicaInfantil = async (req, res) => {
                 await PadreTutor.create({
                     ficha_clinica_id: fichaClinica.id,
                     nombre: padre.nombre,
-                    escolaridad_id: padre.escolaridad,
+                    escolaridad_id: padre.escolaridad && padre.escolaridad !== '' ? padre.escolaridad : null,
                     ocupacion: padre.ocupacion
                 }, { transaction: t });
             }
@@ -2599,7 +2599,7 @@ export const updateReevaluacionInfantil = async (req, res) => {
             PadreTutor.create({
                 ficha_clinica_id: id,
                 nombre: padre.nombre,
-                escolaridad_id: padre.escolaridad,
+                escolaridad_id: padre.escolaridad && padre.escolaridad !== '' ? padre.escolaridad : null,
                 ocupacion: padre.ocupacion
             }, { transaction: t })
         );
