@@ -59,27 +59,15 @@ const obtenerEvolucionPacientes = async (year, semestreFiltro) => {
 
             // Ajustar condición para semestre si es necesario
             if (semestreFiltro === 'primero') {
-                // Solo para infantiles
-                if (modelo === FichaClinicaInfantil) {
-                    condicion.createdAt = {
-                        [Op.gte]: moment(`${ano}-01-01`).startOf('day').toDate(),
-                        [Op.lte]: moment(`${ano}-06-30`).endOf('day').toDate()
-                    };
-                } else {
-                    // Para adultos, devolver objeto vacío para no incluir resultados
-                    return null;
-                }
+                condicion.createdAt = {
+                    [Op.gte]: moment(`${ano}-01-01`).startOf('day').toDate(),
+                    [Op.lte]: moment(`${ano}-06-30`).endOf('day').toDate()
+                };
             } else if (semestreFiltro === 'segundo') {
-                // Solo para adultos
-                if (modelo === FichaClinicaAdulto) {
-                    condicion.createdAt = {
-                        [Op.gte]: moment(`${ano}-07-01`).startOf('day').toDate(),
-                        [Op.lte]: moment(`${ano}-12-31`).endOf('day').toDate()
-                    };
-                } else {
-                    // Para infantiles, devolver objeto vacío para no incluir resultados
-                    return null;
-                }
+                condicion.createdAt = {
+                    [Op.gte]: moment(`${ano}-07-01`).startOf('day').toDate(),
+                    [Op.lte]: moment(`${ano}-12-31`).endOf('day').toDate()
+                };
             }
 
             return condicion;
@@ -855,35 +843,35 @@ export const obtenerDatosDashboard = async (req, res) => {
             if (yearNum === 0) {
                 if (semestreFiltro === 'primero') {
                     return {
-                        inicio: moment(`${primerAno}-01-01`).startOf('day').toDate(),
-                        fin: moment(`${currentYear}-06-30`).endOf('day').toDate()
+                        inicio: moment(`${primerAno}-01-01`, 'YYYY-MM-DD').startOf('day').toDate(),
+                        fin: moment(`${currentYear}-06-30`, 'YYYY-MM-DD').endOf('day').toDate()
                     };
                 } else if (semestreFiltro === 'segundo') {
                     return {
-                        inicio: moment(`${primerAno}-07-01`).startOf('day').toDate(),
-                        fin: moment(`${currentYear}-12-31`).endOf('day').toDate()
+                        inicio: moment(`${primerAno}-07-01`, 'YYYY-MM-DD').startOf('day').toDate(),
+                        fin: moment(`${currentYear}-12-31`, 'YYYY-MM-DD').endOf('day').toDate()
                     };
                 } else {
                     return {
-                        inicio: moment(`${primerAno}-01-01`).startOf('day').toDate(),
-                        fin: moment(`${currentYear}-12-31`).endOf('day').toDate()
+                        inicio: moment(`${primerAno}-01-01`, 'YYYY-MM-DD').startOf('day').toDate(),
+                        fin: moment(`${currentYear}-12-31`, 'YYYY-MM-DD').endOf('day').toDate()
                     };
                 }
             } else {
                 if (semestreFiltro === 'primero') {
                     return {
-                        inicio: moment(`${yearNum}-01-01`).startOf('day').toDate(),
-                        fin: moment(`${yearNum}-06-30`).endOf('day').toDate()
+                        inicio: moment(`${yearNum}-01-01`, 'YYYY-MM-DD').startOf('day').toDate(),
+                        fin: moment(`${yearNum}-06-30`, 'YYYY-MM-DD').endOf('day').toDate()
                     };
                 } else if (semestreFiltro === 'segundo') {
                     return {
-                        inicio: moment(`${yearNum}-07-01`).startOf('day').toDate(),
-                        fin: moment(`${yearNum}-12-31`).endOf('day').toDate()
+                        inicio: moment(`${yearNum}-07-01`, 'YYYY-MM-DD').startOf('day').toDate(),
+                        fin: moment(`${yearNum}-12-31`, 'YYYY-MM-DD').endOf('day').toDate()
                     };
                 } else {
                     return {
-                        inicio: moment(`${yearNum}-01-01`).startOf('day').toDate(),
-                        fin: moment(`${yearNum}-12-31`).endOf('day').toDate()
+                        inicio: moment(`${yearNum}-01-01`, 'YYYY-MM-DD').startOf('day').toDate(),
+                        fin: moment(`${yearNum}-12-31`, 'YYYY-MM-DD').endOf('day').toDate()
                     };
                 }
             }

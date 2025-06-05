@@ -175,7 +175,7 @@ export const login = async (req, res) => {
     res.json({ 
       accessToken, 
       refreshToken,
-      expiresIn: rememberMe ? '7d' : '1h',
+      expiresIn: rememberMe ? '7d' : '3h',
       nombres: estudiante.nombres,
       debe_cambiar_contrasena: Boolean(estudiante.debe_cambiar_contrasena),
       estudiante_id: estudiante.id,
@@ -267,7 +267,7 @@ export const loginDirectores = async (req, res) => {
     res.json({ 
       accessToken, 
       refreshToken,
-      expiresIn: rememberMe ? '7d' : '1h',
+      expiresIn: rememberMe ? '7d' : '2h',
       nombres: user.nombres,
       debe_cambiar_contrasena: Boolean(user.debe_cambiar_contrasena),
       usuario_id: user.id,
@@ -364,7 +364,7 @@ export const loginGeneral = async (req, res) => {
     res.json({ 
       accessToken, 
       refreshToken,
-      expiresIn: rememberMe ? '7d' : '1h',
+      expiresIn: rememberMe ? '7d' : '2h',
       nombres: user.nombres,
       debe_cambiar_contrasena: Boolean(user.debe_cambiar_contrasena),
       usuario_id: user.id,
@@ -391,7 +391,7 @@ const generateTokens = (user, rememberMe = false, estudianteId = null) => {
       is_estudiante: user.Rol.id === 3 || estudianteId !== null
     },
     process.env.JWT_ACCESS_SECRET,
-    { expiresIn: rememberMe ? '7d' : '1h' }
+    { expiresIn: rememberMe ? '7d' : '2h' }
   );
 
   const refreshToken = jwt.sign(
@@ -436,7 +436,7 @@ export const refreshToken = async (req, res) => {
       res.json({ 
         accessToken, 
         refreshToken: newRefreshToken,
-        expiresIn: isLongSession ? '7d' : '1h'
+        expiresIn: isLongSession ? '7d' : '2h'
       });
     });
   } catch (error) {
@@ -757,7 +757,7 @@ export const solicitarRecuperacionContrasena = async (req, res) => {
       }, 
       process.env.JWT_RESET_SECRET, 
       { 
-        expiresIn: '1h' 
+        expiresIn: '2h' 
       }
     );
 
