@@ -181,12 +181,10 @@ const generarContrasenaTemporalSegura = (longitudMinima = 12, longitudMaxima = 1
   const caracteresNumeros = '0123456789';
   const caracteresEspeciales = '!@#$%^&*()';
 
-  // Asegurarse de que la longitud esté dentro de los límites
   const longitudContrasena = Math.floor(Math.random() * (longitudMaxima - longitudMinima + 1)) + longitudMinima;
 
   let contrasena = '';
 
-  // Asegurarse de incluir al menos un carácter de cada tipo
   contrasena += caracteresMayusculas[Math.floor(Math.random() * caracteresMayusculas.length)];
   contrasena += caracteresMinusculas[Math.floor(Math.random() * caracteresMinusculas.length)];
   contrasena += caracteresNumeros[Math.floor(Math.random() * caracteresNumeros.length)];

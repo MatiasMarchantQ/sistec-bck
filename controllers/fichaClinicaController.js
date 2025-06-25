@@ -19,6 +19,16 @@ import sequelize from '../models/index.js';
 import { Op, Sequelize } from 'sequelize';
 import Estudiante from '../models/Estudiante.js';
 import DiagnosticoFichaAdulto from '../models/DiagnosticoFichaAdulto.js';
+import PacienteDependencia from '../models/PacienteDependencia.js';
+import VisitaDomiciliaria from '../models/VisitaDomiciliaria.js';
+import SintomasVisita from '../models/SintomasVisita.js';
+import AdherenciaVisita from '../models/AdherenciaVisita.js';
+import NutricionVisita from '../models/NutricionVisita.js';
+import ActividadVisita from '../models/ActividadVisita.js';
+import EliminacionVisita from '../models/EliminacionVisita.js';
+import Phq9Visita from '../models/Phq9Visita.js';
+import YesavageVisita from '../models/YesavageVisita.js';
+import OtrosSintomasVisita from '../models/OtrosSintomasVisita.js';
 import ExcelJS from 'exceljs';
 
 export const getFichasClinicasPorInstitucion = async (req, res) => {
@@ -114,6 +124,38 @@ export const getFichasClinicasPorInstitucion = async (req, res) => {
             })
         };
 
+        // Preparar condiciones de búsqueda para pacientes de dependencia
+        const whereDependencia = {
+            institucion_id: institucionId,
+            ...(busqueda && {
+                [Op.or]: [
+                    sequelize.where(
+                        sequelize.fn('LOWER', sequelize.col('nombre_paciente')),
+                        { [Op.like]: `%${busqueda.toLowerCase()}%` }
+                    ),
+                    sequelize.where(
+                        sequelize.fn('LOWER', sequelize.col('rut_paciente')),
+                        { [Op.like]: `%${busqueda.toLowerCase()}%` }
+                    )
+                ]
+            })
+        };
+
+        // Aplicar filtros de fecha para dependencia
+        if (fechaInicio && fechaFin) {
+            whereDependencia.fecha_ingreso = {
+                [Op.between]: [fechaInicio, fechaFin]
+            };
+        } else if (fechaInicio) {
+            whereDependencia.fecha_ingreso = {
+                [Op.gte]: fechaInicio
+            };
+        } else if (fechaFin) {
+            whereDependencia.fecha_ingreso = {
+                [Op.lte]: fechaFin
+            };
+        }
+
         // Obtener todas las fichas de adultos
         const fichasAdultos = await FichaClinicaAdulto.findAll({
             where: whereAdultos,
@@ -155,11 +197,54 @@ export const getFichasClinicasPorInstitucion = async (req, res) => {
             order: [['createdAt', 'DESC']]
         });
 
+        // Obtener todas las fichas de dependencia
+        const fichasDependencia = await PacienteDependencia.findAll({
+            where: whereDependencia,
+            include: [
+                {
+                    model: Diagnostico,
+                    as: 'DiagnosticoDependencia',
+                    required: false,
+                    attributes: ['id', 'nombre']
+                },
+                {
+                    model: NivelEscolaridad,
+                    as: 'NivelEscolaridadDependencia',
+                    required: false
+                },
+                {
+                    model: TipoFamilia,
+                    as: 'TipoFamiliaDependencia',
+                    attributes: ['id', 'nombre'],
+                    required: false
+                },
+                {
+                    model: CicloVitalFamiliar,
+                    as: 'cicloVitalFamiliarDependencia',
+                    required: false
+                }
+            ],
+            order: [['createdAt', 'DESC']]
+        });
+
+        // Obtener todos los diagnósticos disponibles
+        const todosLosDiagnosticos = await Diagnostico.findAll();
+        const diagnosticosMap = {};
+        todosLosDiagnosticos.forEach(d => {
+            diagnosticosMap[d.id] = d.nombre; // Crear un mapa de ID a nombre
+        });
+
         // Agrupar fichas de adultos por paciente_id
         const fichasAdultosPorPaciente = {};
         const reevaluacionesAdultosPorPaciente = {};
 
         fichasAdultos.forEach(ficha => {
+            // Validar que la ficha y el paciente existan
+            if (!ficha || !ficha.PacienteAdulto || !ficha.PacienteAdulto.id) {
+                console.warn('Ficha adulto sin paciente válido:', ficha);
+                return;
+            }
+
             const pacienteId = ficha.PacienteAdulto.id;
 
             // Contar reevaluaciones
@@ -182,6 +267,12 @@ export const getFichasClinicasPorInstitucion = async (req, res) => {
         const reevaluacionesInfantilesPorPaciente = {};
 
         fichasInfantiles.forEach(ficha => {
+            // Validar que la ficha y el paciente existan
+            if (!ficha || !ficha.PacienteInfantil || !ficha.PacienteInfantil.id) {
+                console.warn('Ficha infantil sin paciente válido:', ficha);
+                return;
+            }
+
             const pacienteId = ficha.PacienteInfantil.id;
 
             // Contar reevaluaciones
@@ -199,53 +290,149 @@ export const getFichasClinicasPorInstitucion = async (req, res) => {
             }
         });
 
+        // Agrupar fichas de dependencia por rut_paciente (ya que no hay paciente_id)
+        const fichasDependenciaPorPaciente = {};
+
+        fichasDependencia.forEach(ficha => {
+            // Validar que la ficha exista y tenga rut_paciente
+            if (!ficha || !ficha.rut_paciente) {
+                console.warn('Ficha dependencia sin RUT válido:', ficha);
+                return;
+            }
+
+            const rutPaciente = ficha.rut_paciente;
+
+            if (!fichasDependenciaPorPaciente[rutPaciente] ||
+                new Date(ficha.createdAt) > new Date(fichasDependenciaPorPaciente[rutPaciente].createdAt)) {
+                fichasDependenciaPorPaciente[rutPaciente] = ficha;
+            }
+        });
+
         // Formatear fichas de adultos agrupadas
-        const fichasAdultosFormateadas = Object.values(fichasAdultosPorPaciente).map(ficha => ({
-            id: ficha.id,
-            tipo: 'adulto',
-            fecha: ficha.fecha_evaluacion,
-            paciente: {
-                id: ficha.PacienteAdulto.id,
-                nombres: ficha.PacienteAdulto.nombres,
-                apellidos: ficha.PacienteAdulto.apellidos,
-                rut: ficha.PacienteAdulto.rut,
-                edad: ficha.PacienteAdulto.edad
-            },
-            diagnosticos: ficha.DiagnosticoFichas.map(diagnostico => ({
-                id: diagnostico.Diagnostico ? diagnostico.Diagnostico.id : null,
-                nombre: diagnostico.es_diagnostico_otro
-                    ? diagnostico.diagnostico_otro_texto
-                    : (diagnostico.Diagnostico ? diagnostico.Diagnostico.nombre : 'Sin diagnóstico'),
-                esOtro: diagnostico.es_diagnostico_otro
-            })),
-            reevaluaciones: reevaluacionesAdultosPorPaciente[ficha.PacienteAdulto.id] || 0,
-            createdAt: ficha.createdAt,
-            updatedAt: ficha.updatedAt
-        }));
+        const fichasAdultosFormateadas = Object.values(fichasAdultosPorPaciente).map(ficha => {
+            // Validación adicional antes del formateo
+            if (!ficha || !ficha.PacienteAdulto) {
+                console.warn('Ficha adulto inválida en formateo:', ficha);
+                return null;
+            }
+
+            return {
+                id: ficha.id,
+                tipo: 'adulto',
+                fecha: ficha.fecha_evaluacion,
+                paciente: {
+                    id: ficha.PacienteAdulto.id,
+                    nombres: ficha.PacienteAdulto.nombres || 'Sin nombre',
+                    apellidos: ficha.PacienteAdulto.apellidos || 'Sin apellido',
+                    rut: ficha.PacienteAdulto.rut || 'Sin RUT',
+                    edad: ficha.PacienteAdulto.edad || 0
+                },
+                diagnosticos: (ficha.DiagnosticoFichas || []).map(diagnostico => ({
+                    id: diagnostico.Diagnostico ? diagnostico.Diagnostico.id : null,
+                    nombre: diagnostico.es_diagnostico_otro
+                        ? diagnostico.diagnostico_otro_texto
+                        : (diagnostico.Diagnostico ? diagnostico.Diagnostico.nombre : 'Sin diagnóstico'),
+                    esOtro: diagnostico.es_diagnostico_otro || false
+                })),
+                reevaluaciones: reevaluacionesAdultosPorPaciente[ficha.PacienteAdulto.id] || 0,
+                createdAt: ficha.createdAt,
+                updatedAt: ficha.updatedAt
+            };
+        }).filter(ficha => ficha !== null); // Filtrar fichas nulas
 
         // Formatear fichas infantiles agrupadas
-        const fichasInfantilesFormateadas = Object.values(fichasInfantilesPorPaciente).map(ficha => ({
-            id: ficha.id,
-            tipo: 'infantil',
-            fecha: ficha.createdAt,
-            paciente: {
-                id: ficha.PacienteInfantil.id,
-                nombres: ficha.PacienteInfantil.nombres,
-                apellidos: ficha.PacienteInfantil.apellidos,
-                rut: ficha.PacienteInfantil.rut,
-                edad: ficha.PacienteInfantil.edad
-            },
-            diagnostico: {
-                id: null,
-                nombre: ficha.diagnostico_tepsi || 'Sin diagnóstico'
-            },
-            reevaluaciones: reevaluacionesInfantilesPorPaciente[ficha.PacienteInfantil.id] || 0,
-            createdAt: ficha.createdAt,
-            updatedAt: ficha.updatedAt
-        }));
+        const fichasInfantilesFormateadas = Object.values(fichasInfantilesPorPaciente).map(ficha => {
+            // Validación adicional antes del formateo
+            if (!ficha || !ficha.PacienteInfantil) {
+                console.warn('Ficha infantil inválida en formateo:', ficha);
+                return null;
+            }
+
+            return {
+                id: ficha.id,
+                tipo: 'infantil',
+                fecha: ficha.createdAt,
+                paciente: {
+                    id: ficha.PacienteInfantil.id,
+                    nombres: ficha.PacienteInfantil.nombres || 'Sin nombre',
+                    apellidos: ficha.PacienteInfantil.apellidos || 'Sin apellido',
+                    rut: ficha.PacienteInfantil.rut || 'Sin RUT',
+                    edad: ficha.PacienteInfantil.edad || 0
+                },
+                diagnostico: {
+                    id: null,
+                    nombre: ficha.diagnostico_tepsi || 'Sin diagnóstico'
+                },
+                reevaluaciones: reevaluacionesInfantilesPorPaciente[ficha.PacienteInfantil.id] || 0,
+                createdAt: ficha.createdAt,
+                updatedAt: ficha.updatedAt
+            };
+        }).filter(ficha => ficha !== null); // Filtrar fichas nulas
+
+        // Formatear fichas de dependencia agrupadas
+        const fichasDependenciaFormateadas = fichasDependencia.map(ficha => {
+            // Validación adicional antes del formateo
+            if (!ficha) {
+                console.warn('Ficha dependencia inválida en formateo:', ficha);
+                return null;
+            }
+
+            // Dividir el nombre completo en nombres y apellidos
+            const nombreCompleto = ficha.nombre_paciente ? ficha.nombre_paciente.trim() : '';
+            const partesNombre = nombreCompleto.split(' ');
+            const nombres = partesNombre.slice(0, Math.ceil(partesNombre.length / 2)).join(' ');
+            const apellidos = partesNombre.slice(Math.ceil(partesNombre.length / 2)).join(' ');
+
+            // Obtener diagnósticos
+            const diagnosticoIds = ficha.diagnostico_id ? ficha.diagnostico_id.split(',') : []; // Convertir a array
+            const otroDiagnostico = ficha.otro_diagnostico || '';
+
+            // Obtener nombres de diagnósticos
+            const nombresDiagnosticos = diagnosticoIds.map(id => diagnosticosMap[id.trim()]).filter(Boolean); // Filtrar valores nulos
+            let textoDiagnosticos = nombresDiagnosticos.join(', ');
+
+            // Agregar el otroDiagnostico
+            if (otroDiagnostico) {
+                textoDiagnosticos += (textoDiagnosticos ? ', y ' : '') + otroDiagnostico;
+            }
+
+            return {
+                id: ficha.id,
+                tipo: 'dependencia',
+                fecha: ficha.fecha_ingreso,
+                paciente: {
+                    id: ficha.id,
+                    nombres: nombres || 'N/A',
+                    apellidos: ficha.apellido_paciente || 'N/A',
+                    rut: ficha.rut_paciente || 'N/A',
+                    edad: ficha.edad_paciente || 0
+                },
+                diagnostico: textoDiagnosticos || 'Sin diagnóstico',
+                dependencia: {
+                    indiceBarthel: ficha.indice_barthel,
+                    gradoDependencia: ficha.grado_dependencia,
+                    causaDependencia: ficha.causa_dependencia_tiempo
+                },
+                cuidador: {
+                    nombre: ficha.nombre_cuidador,
+                    rut: ficha.rut_cuidador,
+                    edad: ficha.edad_cuidador,
+                    parentesco: ficha.parentesco_cuidador,
+                    puntajeZarit: ficha.puntaje_escala_zarit,
+                    nivelSobrecargaZarit: ficha.nivel_sobrecarga_zarit
+                },
+                reevaluaciones: 0, // Las fichas de dependencia no tienen reevaluaciones por defecto
+                createdAt: ficha.createdAt,
+                updatedAt: ficha.updatedAt
+            };
+        }).filter(ficha => ficha !== null); // Filtrar fichas nulas
 
         // Combinar todas las fichas
-        const todasLasFichas = [...fichasAdultosFormateadas, ...fichasInfantilesFormateadas];
+        const todasLasFichas = [
+            ...fichasAdultosFormateadas,
+            ...fichasInfantilesFormateadas,
+            ...fichasDependenciaFormateadas
+        ];
 
         // Ordenar las fichas combinadas por createdAt
         todasLasFichas.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -395,7 +582,7 @@ export const createFichaClinicaAdulto = async (req, res) => {
         if (diagnostico_otro) {
             await DiagnosticoFichaAdulto.create({
                 ficha_clinica_id: fichaClinica.id,
-                diagnostico_id: null, // Asegúrate de que el ID sea nulo
+                diagnostico_id: null,
                 es_diagnostico_otro: true,
                 diagnostico_otro_texto: diagnostico_otro
             }, { transaction: t });
@@ -750,10 +937,10 @@ export const getFichaClinica = async (req, res) => {
         const { id } = req.params; // Este id es el de la ficha clínica solicitada
         const { tipo } = req.query;
 
-        if (!tipo || (tipo !== 'adulto' && tipo !== 'infantil')) {
+        if (!tipo || (tipo !== 'adulto' && tipo !== 'infantil' && tipo !== 'dependencia')) {
             return res.status(400).json({
                 success: false,
-                message: 'Debe especificar un tipo válido (adulto o infantil)'
+                message: 'Debe especificar un tipo válido (adulto, infantil o dependencia)'
             });
         }
 
@@ -764,8 +951,10 @@ export const getFichaClinica = async (req, res) => {
         let fichaSolicitada;
         if (tipo === 'adulto') {
             fichaSolicitada = await FichaClinicaAdulto.findByPk(id);
-        } else {
+        } else if (tipo === 'infantil') {
             fichaSolicitada = await FichaClinicaInfantil.findByPk(id);
+        } else if (tipo === 'dependencia') {
+            fichaSolicitada = await PacienteDependencia.findByPk(id);
         }
 
         // Validar si la ficha solicitada existe
@@ -840,7 +1029,7 @@ export const getFichaClinica = async (req, res) => {
             if (fichaClinica) {
                 fichaFormateada = formatearFichaAdulto(fichaClinica);
             }
-        } else {
+        } else if (tipo === 'infantil') {
             fichaClinica = await FichaClinicaInfantil.findOne({
                 where: {
                     paciente_id,
@@ -912,7 +1101,63 @@ export const getFichaClinica = async (req, res) => {
             if (fichaClinica) {
                 fichaFormateada = formatearFichaInfantil(fichaClinica);
             }
+        } else if (tipo === 'dependencia') {
+            fichaClinica = await PacienteDependencia.findOne({
+                where: {
+                    id
+                },
+                include: [
+                    {
+                        model: Diagnostico,
+                        as: 'DiagnosticoDependencia',
+                        attributes: ['id', 'nombre']
+                    },
+                    {
+                        model: CicloVitalFamiliar,
+                        as: 'cicloVitalFamiliarDependencia',
+                        attributes: ['id', 'ciclo']
+                    },
+                    {
+                        model: TipoFamilia,
+                        as: 'TipoFamiliaDependencia',
+                        required: false,
+                        attributes: ['id', 'nombre']
+                    },
+                    {
+                        model: NivelEscolaridad,
+                        as: 'NivelEscolaridadDependencia',
+                        attributes: ['id', 'nivel']
+                    },
+                    {
+                        model: Usuario,
+                        as: 'usuarioDependencia',
+                        attributes: ['id', 'nombres', 'apellidos', 'correo']
+                    },
+                    {
+                        model: Estudiante,
+                        as: 'estudianteDependencia',
+                        attributes: ['id', 'nombres', 'apellidos', 'correo']
+                    },
+                    {
+                        model: Institucion,
+                        as: 'institucionDependencia',
+                        attributes: ['id', 'nombre']
+                    }
+                ]
+            });
+
+            if (fichaClinica) {
+                // Aquí puedes procesar los diagnósticos si es necesario
+                const diagnosticoIds = fichaClinica.diagnostico_id ? fichaClinica.diagnostico_id.split(',') : [];
+                const diagnosticos = await Diagnostico.findAll({
+                    where: {
+                        id: diagnosticoIds
+                    }
+                });
+                fichaFormateada = formatearFichaDependencia(fichaClinica, diagnosticos);
+            }
         }
+
 
         if (!fichaClinica) {
             return res.status(404).json({
@@ -935,6 +1180,7 @@ export const getFichaClinica = async (req, res) => {
         });
     }
 };
+
 
 function formatearFichaAdulto(fichaClinica) {
     const tiposFamiliaFormateados = fichaClinica.fichaTipoFamilia && fichaClinica.fichaTipoFamilia.length > 0
@@ -1127,6 +1373,99 @@ function formatearFichaInfantil(fichaClinica) {
         updatedAt: fichaClinica.updatedAt || null
     };
 }
+function formatearFichaDependencia(fichaClinica, diagnosticos) {
+    // Verificaciones de existencia de objetos
+    const paciente = fichaClinica.PacienteDependencia || {};
+    const cicloVitalFamiliar = fichaClinica.cicloVitalFamiliarDependencia || {};
+    const estudiante = fichaClinica.estudianteDependencia || {};
+    const usuario = fichaClinica.usuarioDependencia || {};
+    const institucion = fichaClinica.institucionDependencia || {};
+    const nivelEscolaridad = fichaClinica.NivelEscolaridadDependencia || {};
+    const tipoFamilia = fichaClinica.TipoFamiliaDependencia || {};
+
+    // Formatear los diagnósticos
+    const diagnosticoFormateado = Array.isArray(diagnosticos)
+        ? diagnosticos.map(diagnostico => ({
+            id: diagnostico.id || null,
+            nombre: diagnostico.nombre || null
+        }))
+        : [];
+
+    return {
+        id: fichaClinica.id || null,
+        fechaIngreso: fichaClinica.fecha_ingreso || null,
+        paciente: {
+            nombre: fichaClinica.nombre_paciente || null,
+            apellido: fichaClinica.apellido_paciente || null,
+            rut: fichaClinica.rut_paciente || null,
+            edad: fichaClinica.edad_paciente || null,
+            fechaNacimiento: fichaClinica.fecha_nacimiento_paciente || null
+        },
+        diagnosticos: diagnosticoFormateado,
+        otroDiagnostico: fichaClinica.otro_diagnostico,
+        indiceBarthel: fichaClinica.indice_barthel || null,
+        gradoDependencia: fichaClinica.grado_dependencia || null,
+        causaDependenciaTiempo: fichaClinica.causa_dependencia_tiempo || null,
+        escolaridad: {
+            id: nivelEscolaridad.id || null,
+            nivel: nivelEscolaridad.nivel || null
+        },
+        estadoCivil: fichaClinica.estado_civil || null,
+        direccionPaciente: fichaClinica.direccion_paciente || null,
+        convivencia: fichaClinica.convivencia || null,
+        poseeCarneDiscapacidad: fichaClinica.posee_carne_discapacidad || false,
+        recibePensionSubsidioJubilacion: fichaClinica.recibe_pension_subsidio_jubilacion || false,
+        tipoBeneficio: fichaClinica.tipo_beneficio || null,
+        nombreCuidador: fichaClinica.nombre_cuidador || null,
+        rutCuidador: fichaClinica.rut_cuidador || null,
+        edadCuidador: fichaClinica.edad_cuidador || null,
+        fechaNacimientoCuidador: fichaClinica.fecha_nacimiento_cuidador || null,
+        direccionCuidador: fichaClinica.direccion_cuidador || null,
+        ocupacionCuidador: fichaClinica.ocupacion_cuidador || null,
+        parentescoCuidador: fichaClinica.parentesco_cuidador || null,
+        cuidadorRecibeEstipendio: fichaClinica.cuidador_recibe_estipendio || false,
+        puntajeEscalaZarit: fichaClinica.puntaje_escala_zarit || null,
+        nivelSobrecargaZarit: fichaClinica.nivel_sobrecarga_zarit || null,
+        controlCesfamDependencia: fichaClinica.control_cesfam_dependencia || null,
+        consultaServicioUrgencia: fichaClinica.consulta_servicio_urgencia || null,
+        cicloVitalFamiliar: cicloVitalFamiliar
+            ? {
+                id: cicloVitalFamiliar.id || null,
+                ciclo: cicloVitalFamiliar.ciclo || null
+            }
+            : null,
+        tipoFamilia: tipoFamilia
+            ? {
+                id: tipoFamilia.id || null,
+                nombre: tipoFamilia.nombre || null
+            }
+            : null,
+        otroTipoFamilia: fichaClinica.otro_tipo_familia || null,
+        estudiante: estudiante ? {
+            id: estudiante.id || null,
+            nombres: estudiante.nombres || null,
+            apellidos: estudiante.apellidos || null,
+            email: estudiante.correo || null
+        } : null,
+        usuario: usuario ? {
+            id: usuario.id || null,
+            nombres: usuario.nombres || null,
+            apellidos: usuario.apellidos || null,
+            correo: usuario.correo || null
+        } : null,
+        institucion: institucion ? {
+            id: institucion.id || null,
+            nombre: institucion.nombre || null
+        } : null,
+        factoresRiesgo: fichaClinica.factores_riesgo_familiar || null,
+        telefono1: fichaClinica.telefono_1 || null,
+        telefono2: fichaClinica.telefono_2 || null,
+        horarioLlamada: fichaClinica.horario_llamada || null,
+        conectividad: fichaClinica.conectividad || null,
+        createdAt: fichaClinica.createdAt || null,
+        updatedAt: fichaClinica.updatedAt || null
+    };
+}
 
 export const obtenerFichasClinicas = async (req, res) => {
     try {
@@ -1149,12 +1488,15 @@ export const obtenerFichasClinicas = async (req, res) => {
         if (!tipoFicha || tipoFicha === '') {
             modelos = [
                 { modelo: FichaClinicaAdulto, pacienteModelo: PacienteAdulto },
-                { modelo: FichaClinicaInfantil, pacienteModelo: PacienteInfantil }
+                { modelo: FichaClinicaInfantil, pacienteModelo: PacienteInfantil },
+                { modelo: PacienteDependencia, pacienteModelo: null } // PacienteDependencia es especial
             ];
         } else if (tipoFicha === 'adulto') {
             modelos = [{ modelo: FichaClinicaAdulto, pacienteModelo: PacienteAdulto }];
         } else if (tipoFicha === 'infantil') {
             modelos = [{ modelo: FichaClinicaInfantil, pacienteModelo: PacienteInfantil }];
+        } else if (tipoFicha === 'dependencia') {
+            modelos = [{ modelo: PacienteDependencia, pacienteModelo: null }];
         }
 
         if (institucion) {
@@ -1200,6 +1542,114 @@ export const obtenerFichasClinicas = async (req, res) => {
 
         const resultados = await Promise.all(
             modelos.map(async ({ modelo, pacienteModelo }) => {
+                // Manejo especial para PacienteDependencia
+                if (modelo === PacienteDependencia) {
+                    const whereCondicionesDependencia = { ...whereConditions };
+
+                    // Condiciones de búsqueda de texto para PacienteDependencia
+                    if (textoBusqueda) {
+                        whereCondicionesDependencia[Op.or] = [
+                            sequelize.where(
+                                sequelize.fn('LOWER', sequelize.col('nombre_paciente')),
+                                'LIKE',
+                                `%${textoBusqueda.toLowerCase()}%`
+                            ),
+                            sequelize.where(
+                                sequelize.fn('LOWER', sequelize.col('rut_paciente')),
+                                'LIKE',
+                                `%${textoBusqueda.toLowerCase()}%`
+                            )
+                        ];
+                    }
+
+                    // Filtrar por tipo de institución si es necesario
+                    if (tipoInstitucion) {
+                        // Primero obtener las instituciones del tipo solicitado
+                        const institucionesDelTipo = await Institucion.findAll({
+                            where: { tipo_id: parseInt(tipoInstitucion) },
+                            attributes: ['id']
+                        });
+
+                        const idsInstituciones = institucionesDelTipo.map(inst => inst.id);
+
+                        if (idsInstituciones.length > 0) {
+                            whereCondicionesDependencia.institucion_id = {
+                                [Op.in]: idsInstituciones
+                            };
+                        } else {
+                            // Si no hay instituciones del tipo, devolver array vacío
+                            return [];
+                        }
+                    }
+
+                    const pacientesDependencia = await modelo.findAll({
+                        where: whereCondicionesDependencia,
+                        include: [
+                            {
+                                model: Diagnostico,
+                                as: 'DiagnosticoDependencia',
+                                attributes: ['id', 'nombre'],
+                                required: false
+                            }
+                        ],
+                        order: [['createdAt', 'DESC']]
+                    });
+
+                    // Obtener los datos de institución y diagnósticos múltiples por separado para cada paciente
+                    const pacientesConInstitucion = await Promise.all(
+                        pacientesDependencia.map(async (paciente) => {
+                            const institucion = await Institucion.findByPk(paciente.institucion_id, {
+                                include: [{
+                                    model: TipoInstitucion,
+                                    required: false
+                                }]
+                            });
+
+                            // Procesar múltiples diagnósticos
+                            let diagnosticos = [];
+
+                            if (paciente.diagnostico_id) {
+                                // Convertir string de IDs separados por comas a array
+                                const diagnosticoIds = paciente.diagnostico_id.toString().split(',').map(id => parseInt(id.trim()));
+
+                                // Obtener todos los diagnósticos por ID
+                                const diagnosticosEncontrados = await Diagnostico.findAll({
+                                    where: {
+                                        id: {
+                                            [Op.in]: diagnosticoIds
+                                        }
+                                    },
+                                    attributes: ['id', 'nombre']
+                                });
+
+                                diagnosticos = diagnosticosEncontrados.map(diag => ({
+                                    id: diag.id,
+                                    nombre: diag.nombre
+                                }));
+                            }
+
+                            const pacienteFormateado = {
+                                ...paciente.get({ plain: true }),
+                                paciente_id: paciente.id,
+                                is_reevaluacion: false,
+                                reevaluaciones: 0,
+                                Institucion: institucion,
+                                // Mantener el DiagnosticoDependencia original para compatibilidad
+                                DiagnosticoDependencia: paciente.DiagnosticoDependencia,
+                                // Agregar el array de diagnósticos múltiples
+                                diagnosticos: diagnosticos,
+                                // Agregar el diagnóstico personalizado
+                                otroDiagnostico: paciente.otro_diagnostico || null
+                            };
+
+                            return pacienteFormateado;
+                        })
+                    );
+
+                    return pacientesConInstitucion;
+                }
+
+                // Lógica original para FichaClinicaAdulto y FichaClinicaInfantil
                 const includeConfig = [
                     {
                         model: pacienteModelo,
@@ -1313,127 +1763,439 @@ export const exportarFichasClinicas = async (req, res) => {
             limite = 10000  // Establecer un límite alto para obtener todos los registros
         } = req.query;
 
-        // Si no se especifica tipo de ficha, exportar ambos
-        const tipoFichaFinal = tipoFicha || '';
+        // Condiciones base
+        const whereConditions = {};
+        let modelos = [];
 
-        // Aquí puedes reutilizar la lógica de obtenerFichasClinicas
-        const params = {
-            tipoInstitucion,
-            institucion,
-            textoBusqueda,
-            tipoFicha: tipoFichaFinal,
-            fechaInicial,
-            fechaFinal,
-            pagina,
-            limite
-        };
+        // Manejo de tipos de ficha - IGUAL QUE EN obtenerFichasClinicas
+        if (!tipoFicha || tipoFicha === '') {
+            modelos = [
+                { modelo: FichaClinicaAdulto, pacienteModelo: PacienteAdulto },
+                { modelo: FichaClinicaInfantil, pacienteModelo: PacienteInfantil },
+                { modelo: PacienteDependencia, pacienteModelo: null }
+            ];
+        } else if (tipoFicha === 'adulto') {
+            modelos = [{ modelo: FichaClinicaAdulto, pacienteModelo: PacienteAdulto }];
+        } else if (tipoFicha === 'infantil') {
+            modelos = [{ modelo: FichaClinicaInfantil, pacienteModelo: PacienteInfantil }];
+        } else if (tipoFicha === 'dependencia') {
+            modelos = [{ modelo: PacienteDependencia, pacienteModelo: null }];
+        }
 
-        // Simular la llamada a obtenerFichasClinicas
-        const fichas = await new Promise((resolve, reject) => {
-            const mockRes = {
-                json: (data) => resolve(data),
-                status: (code) => ({
-                    json: (errorData) => reject(new Error(errorData.message))
-                })
-            };
+        if (institucion) {
+            whereConditions.institucion_id = parseInt(institucion);
+        }
 
-            obtenerFichasClinicas({ query: params }, mockRes);
-        });
+        // Agregar condiciones de fecha
+        if (fechaInicial || fechaFinal) {
+            const condicionesFecha = {};
 
-        // Transformar los datos para exportación
-        const datosExportacion = await Promise.all(fichas.fichas.map(async ficha => {
-            const esInfantil = ficha.PacienteInfantil !== undefined;
-            const paciente = esInfantil ? ficha.PacienteInfantil : ficha.PacienteAdulto;
-
-            // Obtener la primera ficha clínica (is_reevaluacion = 0)
-            const primeraFicha = await (esInfantil ? FichaClinicaInfantil : FichaClinicaAdulto).findOne({
-                where: {
-                    paciente_id: paciente.id,
-                    is_reevaluacion: 0
-                },
-                order: [['createdAt', 'ASC']]
-            });
-
-            // Obtener la última ficha clínica (is_reevaluacion = 1)
-            const ultimaFicha = await (esInfantil ? FichaClinicaInfantil : FichaClinicaAdulto).findOne({
-                where: {
-                    paciente_id: paciente.id,
-                    is_reevaluacion: 1
-                },
-                order: [['createdAt', 'DESC']]
-            });
-
-            const resultado = {
-                tipo: esInfantil ? 'Infantil' : 'Adulto',
-                rut: paciente.rut,
-                nombres: paciente.nombres,
-                apellidos: paciente.apellidos,
-                institucion: ficha.Institucion.nombre,
-                tipoInstitucion: ficha.Institucion.TipoInstitucion?.tipo || 'No especificado',
-                fechaInicial: primeraFicha ? new Date(primeraFicha.createdAt).toLocaleDateString() : 'No registrada',
-                fechaFinal: ultimaFicha ? new Date(ultimaFicha.createdAt).toLocaleDateString() : 'No registrada',
-                reevaluaciones: ficha.reevaluaciones
-            };
-
-            if (esInfantil) {
-                resultado.diagnosticoTEPSIInicial = primeraFicha ? primeraFicha.diagnostico_tepsi : 'No registrado';
-                resultado.diagnosticoTEPSIFinal = ultimaFicha ? ultimaFicha.diagnostico_tepsi : 'No registrado';
-
-                // Comparar diagnósticos
-                resultado.estadoDiagnostico = compararDiagnosticos(resultado.diagnosticoTEPSIInicial, resultado.diagnosticoTEPSIFinal);
-            } else {
-                resultado.valorHbA1cInicial = primeraFicha ? primeraFicha.valor_hbac1 : 'No registrado';
-                resultado.valorHbA1cFinal = ultimaFicha ? ultimaFicha.valor_hbac1 : 'No registrado';
-
-                // Comparar valores HbA1c
-                resultado.estadoHbA1c = compararHbA1c(resultado.valorHbA1cInicial, resultado.valorHbA1cFinal);
+            if (fechaInicial) {
+                condicionesFecha[Op.gte] = new Date(fechaInicial);
             }
 
-            return resultado;
+            if (fechaFinal) {
+                condicionesFecha[Op.lte] = new Date(fechaFinal);
+            }
+
+            whereConditions.createdAt = condicionesFecha;
+        }
+
+        const textConditions = textoBusqueda
+            ? {
+                [Op.or]: [
+                    sequelize.where(
+                        sequelize.fn('LOWER', sequelize.col('nombres')),
+                        'LIKE',
+                        `%${textoBusqueda.toLowerCase()}%`
+                    ),
+                    sequelize.where(
+                        sequelize.fn('LOWER', sequelize.col('apellidos')),
+                        'LIKE',
+                        `%${textoBusqueda.toLowerCase()}%`
+                    ),
+                    sequelize.where(
+                        sequelize.fn('LOWER', sequelize.col('rut')),
+                        'LIKE',
+                        `%${textoBusqueda.toLowerCase()}%`
+                    )
+                ]
+            }
+            : {};
+
+        const resultados = await Promise.all(
+            modelos.map(async ({ modelo, pacienteModelo }) => {
+                // Manejo especial para PacienteDependencia
+                if (modelo === PacienteDependencia) {
+                    const whereCondicionesDependencia = { ...whereConditions };
+
+                    // Condiciones de búsqueda de texto para PacienteDependencia
+                    if (textoBusqueda) {
+                        whereCondicionesDependencia[Op.or] = [
+                            sequelize.where(
+                                sequelize.fn('LOWER', sequelize.col('nombre_paciente')),
+                                'LIKE',
+                                `%${textoBusqueda.toLowerCase()}%`
+                            ),
+                            sequelize.where(
+                                sequelize.fn('LOWER', sequelize.col('rut_paciente')),
+                                'LIKE',
+                                `%${textoBusqueda.toLowerCase()}%`
+                            )
+                        ];
+                    }
+
+                    // Filtrar por tipo de institución si es necesario
+                    if (tipoInstitucion) {
+                        const institucionesDelTipo = await Institucion.findAll({
+                            where: { tipo_id: parseInt(tipoInstitucion) },
+                            attributes: ['id']
+                        });
+
+                        const idsInstituciones = institucionesDelTipo.map(inst => inst.id);
+
+                        if (idsInstituciones.length > 0) {
+                            whereCondicionesDependencia.institucion_id = {
+                                [Op.in]: idsInstituciones
+                            };
+                        } else {
+                            return [];
+                        }
+                    }
+
+                    const pacientesDependencia = await modelo.findAll({
+                        where: whereCondicionesDependencia,
+                        include: [
+                            {
+                                model: Diagnostico,
+                                as: 'DiagnosticoDependencia',
+                                attributes: ['id', 'nombre'],
+                                required: false
+                            }
+                        ],
+                        order: [['createdAt', 'DESC']]
+                    });
+
+                    // Obtener los datos de institución y diagnósticos múltiples por separado para cada paciente
+                    const pacientesConInstitucion = await Promise.all(
+                        pacientesDependencia.map(async (paciente) => {
+                            const institucion = await Institucion.findByPk(paciente.institucion_id, {
+                                include: [{
+                                    model: TipoInstitucion,
+                                    required: false
+                                }]
+                            });
+
+                            // Procesar múltiples diagnósticos
+                            let diagnosticos = [];
+
+                            if (paciente.diagnostico_id) {
+                                // Convertir string de IDs separados por comas a array
+                                const diagnosticoIds = paciente.diagnostico_id.toString().split(',').map(id => parseInt(id.trim()));
+
+                                // Obtener todos los diagnósticos por ID
+                                const diagnosticosEncontrados = await Diagnostico.findAll({
+                                    where: {
+                                        id: {
+                                            [Op.in]: diagnosticoIds
+                                        }
+                                    },
+                                    attributes: ['id', 'nombre']
+                                });
+
+                                diagnosticos = diagnosticosEncontrados.map(diag => ({
+                                    id: diag.id,
+                                    nombre: diag.nombre
+                                }));
+                            }
+
+                            return {
+                                ...paciente.get({ plain: true }),
+                                Institucion: institucion,
+                                // Agregar el array de diagnósticos múltiples
+                                diagnosticos: diagnosticos,
+                                // Agregar el diagnóstico personalizado
+                                otroDiagnostico: paciente.otro_diagnostico || null,
+                                tipo: 'dependencia'
+                            };
+                        })
+                    );
+
+                    return pacientesConInstitucion;
+                }
+
+                // Lógica original para FichaClinicaAdulto y FichaClinicaInfantil
+                const includeConfig = [
+                    {
+                        model: pacienteModelo,
+                        where: textConditions,
+                        required: true
+                    },
+                    {
+                        model: Institucion,
+                        include: [{
+                            model: TipoInstitucion,
+                            required: false
+                        }],
+                        where: tipoInstitucion ? { tipo_id: parseInt(tipoInstitucion) } : {},
+                        required: true
+                    }
+                ];
+
+                if (modelo === FichaClinicaAdulto) {
+                    includeConfig.push({
+                        model: DiagnosticoFichaAdulto,
+                        as: 'DiagnosticoFichas',
+                        include: [{
+                            model: Diagnostico,
+                            as: 'Diagnostico',
+                            attributes: ['id', 'nombre'],
+                            required: false
+                        }],
+                        required: false
+                    });
+                }
+
+                const fichas = await modelo.findAll({
+                    where: whereConditions,
+                    include: includeConfig,
+                    order: [['createdAt', 'DESC']]
+                });
+
+                const fichasPorPaciente = {};
+                const reevaluacionesPorPaciente = {};
+
+                fichas.forEach(ficha => {
+                    const pacienteId = ficha.paciente_id;
+
+                    if (ficha.is_reevaluacion) {
+                        reevaluacionesPorPaciente[pacienteId] =
+                            (reevaluacionesPorPaciente[pacienteId] || 0) + 1;
+                    }
+
+                    if (!fichasPorPaciente[pacienteId] ||
+                        new Date(ficha.createdAt) > new Date(fichasPorPaciente[pacienteId].createdAt)) {
+                        fichasPorPaciente[pacienteId] = ficha;
+                    }
+                });
+
+                return Object.values(fichasPorPaciente).map(ficha => {
+                    const fichaFormateada = {
+                        ...ficha.get({ plain: true }),
+                        reevaluaciones: reevaluacionesPorPaciente[ficha.paciente_id] || 0,
+                        tipo: modelo === FichaClinicaAdulto ? 'adulto' : 'infantil'
+                    };
+
+                    if (modelo === FichaClinicaAdulto && ficha.DiagnosticoFichas) {
+                        fichaFormateada.diagnosticos = (ficha.DiagnosticoFichas || []).map(diagnosticoFicha => ({
+                            id: diagnosticoFicha.es_diagnostico_otro ? null : diagnosticoFicha.diagnostico_id,
+                            nombre: diagnosticoFicha.es_diagnostico_otro
+                                ? diagnosticoFicha.diagnostico_otro_texto
+                                : (diagnosticoFicha.Diagnostico?.nombre || 'No especificado'),
+                            esOtro: diagnosticoFicha.es_diagnostico_otro
+                        }));
+                    }
+
+                    return fichaFormateada;
+                });
+            })
+        );
+
+        const fichasCombinadas = resultados.flat().sort((a, b) =>
+            new Date(b.createdAt) - new Date(a.createdAt)
+        );
+
+        // Transformar los datos para exportación
+        const datosExportacion = await Promise.all(fichasCombinadas.map(async ficha => {
+            const tipo = ficha.tipo;
+            
+            if (tipo === 'dependencia') {
+                // Manejo especial para pacientes de dependencia
+                const resultado = {
+                    tipo: 'Dependencia',
+                    rut: ficha.rut_paciente,
+                    nombres: ficha.nombre_paciente,
+                    apellidos: '', // PacienteDependencia no tiene apellidos separados
+                    institucion: ficha.Institucion?.nombre || 'No especificado',
+                    tipoInstitucion: ficha.Institucion?.TipoInstitucion?.tipo || 'No especificado',
+                    fechaInicial: new Date(ficha.createdAt).toLocaleDateString(),
+                    // Campos específicos de dependencia
+                    edad: ficha.edad_paciente,
+                    indiceBarthel: ficha.indice_barthel || 'No registrado',
+                    gradoDependencia: ficha.grado_dependencia || 'No registrado',
+                    nombreCuidador: ficha.nombre_cuidador || 'No registrado',
+                    puntajeZarit: ficha.puntaje_escala_zarit || 'No registrado',
+                    nivelSobrecargaZarit: ficha.nivel_sobrecarga_zarit || 'No registrado',
+                    // Diagnósticos múltiples - CORREGIDO
+                    diagnosticos: ficha.diagnosticos && ficha.diagnosticos.length > 0 
+                        ? ficha.diagnosticos.map(d => d.nombre).join(', ') 
+                        : 'No registrado',
+                    otroDiagnostico: ficha.otroDiagnostico || 'No registrado'
+                };
+
+                return resultado;
+            } else {
+                // Lógica original para adultos e infantiles
+                const esInfantil = tipo === 'infantil';
+                const paciente = esInfantil ? ficha.PacienteInfantil : ficha.PacienteAdulto;
+
+                // Obtener la primera ficha clínica (is_reevaluacion = 0)
+                const primeraFicha = await (esInfantil ? FichaClinicaInfantil : FichaClinicaAdulto).findOne({
+                    where: {
+                        paciente_id: paciente.id,
+                        is_reevaluacion: 0
+                    },
+                    order: [['createdAt', 'ASC']]
+                });
+
+                // Obtener la última ficha clínica (is_reevaluacion = 1)
+                const ultimaFicha = await (esInfantil ? FichaClinicaInfantil : FichaClinicaAdulto).findOne({
+                    where: {
+                        paciente_id: paciente.id,
+                        is_reevaluacion: 1
+                    },
+                    order: [['createdAt', 'DESC']]
+                });
+
+                const resultado = {
+                    tipo: esInfantil ? 'Infantil' : 'Adulto',
+                    rut: paciente.rut,
+                    nombres: paciente.nombres,
+                    apellidos: paciente.apellidos,
+                    institucion: ficha.Institucion.nombre,
+                    tipoInstitucion: ficha.Institucion.TipoInstitucion?.tipo || 'No especificado',
+                    fechaInicial: primeraFicha ? new Date(primeraFicha.createdAt).toLocaleDateString() : 'No registrada',
+                    fechaFinal: ultimaFicha ? new Date(ultimaFicha.createdAt).toLocaleDateString() : 'No registrada',
+                    reevaluaciones: ficha.reevaluaciones
+                };
+
+                if (esInfantil) {
+                    resultado.diagnosticoTEPSIInicial = primeraFicha ? primeraFicha.diagnostico_tepsi : 'No registrado';
+                    resultado.diagnosticoTEPSIFinal = ultimaFicha ? ultimaFicha.diagnostico_tepsi : 'No registrado';
+                    resultado.estadoDiagnostico = compararDiagnosticos(resultado.diagnosticoTEPSIInicial, resultado.diagnosticoTEPSIFinal);
+                } else {
+                    resultado.valorHbA1cInicial = primeraFicha ? primeraFicha.valor_hbac1 : 'No registrado';
+                    resultado.valorHbA1cFinal = ultimaFicha ? ultimaFicha.valor_hbac1 : 'No registrado';
+                    resultado.estadoHbA1c = compararHbA1c(resultado.valorHbA1cInicial, resultado.valorHbA1cFinal);
+                }
+
+                return resultado;
+            }
         }));
 
-        // Definir columnas dinámicamente
-        const columnasBase = [
-            { header: 'Tipo', key: 'tipo' },
-            { header: 'RUT', key: 'rut' },
-            { header: 'Nombres', key: 'nombres' },
-            { header: 'Apellidos', key: 'apellidos' },
-            { header: 'Institución', key: 'institucion' },
-            { header: 'Tipo Institución', key: 'tipoInstitucion' },
-            { header: 'Fecha Inicial', key: 'fechaInicial' },
-            { header: 'Fecha Final', key: 'fechaFinal' },
-            { header: 'Reevaluaciones', key: 'reevaluaciones' }
-        ];
+        // Definir columnas dinámicamente según el tipo de ficha
+        let columnas = [];
 
-        // Agregar columnas específicas según el tipo de ficha o si se exportan ambos
-        const columnasExtras = tipoFichaFinal === 'infantil'
-            ? [
+        if (tipoFicha === 'dependencia') {
+            // Columnas específicas para dependencia (SIN fechaFinal y reevaluaciones)
+            columnas = [
+                { header: 'Tipo', key: 'tipo' },
+                { header: 'RUT', key: 'rut' },
+                { header: 'Nombres', key: 'nombres' },
+                { header: 'Apellidos', key: 'apellidos' },
+                { header: 'Institución', key: 'institucion' },
+                { header: 'Tipo Institución', key: 'tipoInstitucion' },
+                { header: 'Fecha Registro', key: 'fechaInicial' },
+                { header: 'Edad', key: 'edad' },
+                { header: 'Índice Barthel', key: 'indiceBarthel' },
+                { header: 'Grado Dependencia', key: 'gradoDependencia' },
+                { header: 'Nombre Cuidador', key: 'nombreCuidador' },
+                { header: 'Puntaje Zarit', key: 'puntajeZarit' },
+                { header: 'Diagnósticos', key: 'diagnosticos' },
+                { header: 'Otro Diagnóstico', key: 'otroDiagnostico' }
+            ];
+        } else if (tipoFicha === 'infantil') {
+            columnas = [
+                { header: 'Tipo', key: 'tipo' },
+                { header: 'RUT', key: 'rut' },
+                { header: 'Nombres', key: 'nombres' },
+                { header: 'Apellidos', key: 'apellidos' },
+                { header: 'Institución', key: 'institucion' },
+                { header: 'Tipo Institución', key: 'tipoInstitucion' },
+                { header: 'Fecha Inicial', key: 'fechaInicial' },
+                { header: 'Fecha Final', key: 'fechaFinal' },
+                { header: 'Reevaluaciones', key: 'reevaluaciones' },
                 { header: 'Diagnóstico DSM Inicial', key: 'diagnosticoTEPSIInicial' },
                 { header: 'Diagnóstico DSM Final', key: 'diagnosticoTEPSIFinal' },
                 { header: 'Estado Diagnóstico', key: 'estadoDiagnostico' }
-            ]
-            : tipoFichaFinal === 'adulto'
-                ? [
-                    { header: 'Valor HbA1c Inicial', key: 'valorHbA1cInicial' },
-                    { header: 'Valor HbA1c Final', key: 'valorHbA1cFinal' },
-                    { header: 'Estado HbA1c', key: 'estadoHbA1c' }
-                ]
-                : [
-                    // Si no hay tipo específico, incluir columnas de ambos
+            ];
+        } else if (tipoFicha === 'adulto') {
+            columnas = [
+                { header: 'Tipo', key: 'tipo' },
+                { header: 'RUT', key: 'rut' },
+                { header: 'Nombres', key: 'nombres' },
+                { header: 'Apellidos', key: 'apellidos' },
+                { header: 'Institución', key: 'institucion' },
+                { header: 'Tipo Institución', key: 'tipoInstitucion' },
+                { header: 'Fecha Inicial', key: 'fechaInicial' },
+                { header: 'Fecha Final', key: 'fechaFinal' },
+                { header: 'Reevaluaciones', key: 'reevaluaciones' },
+                { header: 'Valor HbA1c Inicial', key: 'valorHbA1cInicial' },
+                { header: 'Valor HbA1c Final', key: 'valorHbA1cFinal' },
+                { header: 'Estado HbA1c', key: 'estadoHbA1c' }
+            ];
+        } else {
+            // Si no hay tipo específico, usar columnas base + todas las específicas
+            // Pero separar dependencia del resto por sus campos únicos
+            const hayDependencia = datosExportacion.some(ficha => ficha.tipo === 'Dependencia');
+            const hayOtros = datosExportacion.some(ficha => ficha.tipo !== 'Dependencia');
+
+            if (hayDependencia && !hayOtros) {
+                // Solo dependencia
+                columnas = [
+                    { header: 'Tipo', key: 'tipo' },
+                    { header: 'RUT', key: 'rut' },
+                    { header: 'Nombres', key: 'nombres' },
+                    { header: 'Apellidos', key: 'apellidos' },
+                    { header: 'Institución', key: 'institucion' },
+                    { header: 'Tipo Institución', key: 'tipoInstitucion' },
+                    { header: 'Fecha Registro', key: 'fechaInicial' },
+                    { header: 'Edad', key: 'edad' },
+                    { header: 'Índice Barthel', key: 'indiceBarthel' },
+                    { header: 'Grado Dependencia', key: 'gradoDependencia' },
+                    { header: 'Nombre Cuidador', key: 'nombreCuidador' },
+                    { header: 'Puntaje Zarit', key: 'puntajeZarit' },
+                    { header: 'Diagnósticos', key: 'diagnosticos' },
+                    { header: 'Otro Diagnóstico', key: 'otroDiagnostico' }
+                ];
+            } else {
+                // Mezcla de tipos o solo adultos/infantiles
+                columnas = [
+                    { header: 'Tipo', key: 'tipo' },
+                    { header: 'RUT', key: 'rut' },
+                    { header: 'Nombres', key: 'nombres' },
+                    { header: 'Apellidos', key: 'apellidos' },
+                    { header: 'Institución', key: 'institucion' },
+                    { header: 'Tipo Institución', key: 'tipoInstitucion' },
+                    { header: 'Fecha Inicial', key: 'fechaInicial' },
+                    { header: 'Fecha Final', key: 'fechaFinal' },
+                    { header: 'Reevaluaciones', key: 'reevaluaciones' },
+                    // Columnas infantiles
                     { header: 'Diagnóstico DSM Inicial', key: 'diagnosticoTEPSIInicial' },
                     { header: 'Diagnóstico DSM Final', key: 'diagnosticoTEPSIFinal' },
                     { header: 'Estado Diagnóstico', key: 'estadoDiagnostico' },
+                    // Columnas adultos
                     { header: 'Valor HbA1c Inicial', key: 'valorHbA1cInicial' },
                     { header: 'Valor HbA1c Final', key: 'valorHbA1cFinal' },
-                    { header: 'Estado HbA1c', key: 'estadoHbA1c' }
+                    { header: 'Estado HbA1c', key: 'estadoHbA1c' },
+                    // Columnas dependencia
+                    { header: 'Edad', key: 'edad' },
+                    { header: 'Índice Barthel', key: 'indiceBarthel' },
+                    { header: 'Grado Dependencia', key: 'gradoDependencia' },
+                    { header: 'Nombre Cuidador', key: 'nombreCuidador' },
+                    { header: 'Puntaje Zarit', key: 'puntajeZarit' },
+                    { header: 'Diagnósticos', key: 'diagnosticos' },
+                    { header: 'Otro Diagnóstico', key: 'otroDiagnostico' }
                 ];
+            }
+        }
 
         // Crear el archivo Excel
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet('Fichas Clínicas');
 
         // Definir columnas
-        worksheet.columns = [...columnasBase, ...columnasExtras];
+        worksheet.columns = columnas;
 
         // Agregar datos
         worksheet.addRows(datosExportacion);
@@ -1446,7 +2208,7 @@ export const exportarFichasClinicas = async (req, res) => {
                     maxLength = Math.max(maxLength, cell.value.toString().length);
                 }
             });
-            column.width = maxLength + 2; // +2 para un poco de espacio extra
+            column.width = Math.min(maxLength + 2, 50); // Limitar ancho máximo
         });
 
         // Generar y enviar el archivo Excel
@@ -1532,7 +2294,7 @@ export const getReevaluaciones = async (req, res) => {
         // Construir condiciones de filtrado
         const whereConditions = {
             paciente_id: fichaOriginal.paciente_id,
-            is_reevaluacion: true // Asegúrate de que esto esté correcto
+            is_reevaluacion: true
         };
 
         // Agregar filtro de fechas si están presentes
@@ -1562,10 +2324,10 @@ export const getReevaluaciones = async (req, res) => {
                     },
                     {
                         model: DiagnosticoFichaAdulto,
-                        as: 'DiagnosticoFichas', // Añade este alias
+                        as: 'DiagnosticoFichas',
                         include: [{
                             model: Diagnostico,
-                            as: 'Diagnostico', // Y este también
+                            as: 'Diagnostico',
                             attributes: ['id', 'nombre']
                         }]
                     },
@@ -1726,10 +2488,10 @@ function formatearReevaluacionAdulto(reevaluacion) {
         },
         diagnosticos: Array.isArray(reevaluacion.DiagnosticoFichas) ?
             reevaluacion.DiagnosticoFichas.map(diagnosticoFicha => ({
-                id: diagnosticoFicha.Diagnostico?.id || null, // Asegúrate de que Diagnostico existe
+                id: diagnosticoFicha.Diagnostico?.id || null,
                 nombre: diagnosticoFicha.es_diagnostico_otro
                     ? diagnosticoFicha.diagnostico_otro_texto
-                    : diagnosticoFicha.Diagnostico?.nombre || 'N/A', // Asegúrate de que Diagnostico existe
+                    : diagnosticoFicha.Diagnostico?.nombre || 'N/A',
                 esOtro: diagnosticoFicha.es_diagnostico_otro
             })) : [],
         escolaridad: {
@@ -2492,7 +3254,7 @@ export const updateReevaluacion = async (req, res) => {
                     as: 'DiagnosticoFichas',
                     include: [{
                         model: Diagnostico,
-                        as: 'Diagnostico'  // Agregar el alias aquí
+                        as: 'Diagnostico' 
                     }]
                 }] : [])
             ]

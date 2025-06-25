@@ -32,7 +32,6 @@ export const enviarCorreoRecuperacion = async (email, token) => {
   return transporter.sendMail(mailOptions);
 };
 
-// Agrega este método en src/services/emailService.js
 export const enviarCredencialesEstudiante = async (estudiante, contrasena) => {
   const loginUrl = `${process.env.FRONTEND_URL}/login`;
 

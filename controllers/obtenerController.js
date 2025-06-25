@@ -47,7 +47,7 @@ export const obtenerInstitucionesPorTipo = async (req, res) => {
         tipo_id: tipoId, 
         estado: true 
       },
-      attributes: ['id', 'nombre'] // Cambiado 'tipo' por 'nombre' si ese es el campo correcto
+      attributes: ['id', 'nombre']
     });
     res.json(instituciones);
   } catch (error) {
@@ -65,7 +65,7 @@ export const obtenerReceptoresPorInstitucion = async (req, res) => {
         institucion_id: institucionId,
         estado: true // Filtrar solo los receptores activos
       },
-      attributes: ['id', 'nombre', 'cargo', 'estado'] // Incluir el estado en los atributos
+      attributes: ['id', 'nombre', 'cargo', 'estado']
     });
     res.json(receptores);
   } catch (error) {
@@ -104,7 +104,7 @@ export const obtenerCiclosVitalesFamiliares = async (req, res) => {
 export const obtenerTiposFamilia = async (req, res) => {
   try {
     const tiposFamilia = await TipoFamilia.findAll({
-      attributes: ['id', 'nombre'],  // Cambia 'tipo' por 'nombre' si ese es el nombre correcto de la columna
+      attributes: ['id', 'nombre'],
       order: [['id', 'ASC']]
     });
     res.json(tiposFamilia);

@@ -1,5 +1,5 @@
 import express from 'express';
-import { verifyToken } from '../middleware/authMiddleware.js'; // Asegúrate de que la ruta sea correcta
+import { verifyToken } from '../middleware/authMiddleware.js';
 import {
   obtenerAsignaciones,
   obtenerAsignacionesAgenda,

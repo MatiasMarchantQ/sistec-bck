@@ -52,7 +52,7 @@ export const crearSeguimientoInfantil = async (req, res) => {
       area_socioemocional: areaDPM.socioemocional ? 1 : 0,
       usuario_id: usuario_id,
       estudiante_id: estudiante_id || null,
-      numero_llamado: numero_llamado // Añadir número de llamado
+      numero_llamado: numero_llamado
     });
 
     res.status(201).json(nuevoSeguimiento);

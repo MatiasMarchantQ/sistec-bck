@@ -907,7 +907,7 @@ export const obtenerDatosDashboard = async (req, res) => {
         });
         const idsInstitucionesAdultos = institucionesAdultos.map(i => i.id);
 
-        // CAMBIO PRINCIPAL: Obtener todas las instituciones sin filtrar por semestre
+        // Obtener todas las instituciones sin filtrar por semestre
         const todasLasInstituciones = await Institucion.findAll({
             where: {
                 tipo_id: {
@@ -918,7 +918,7 @@ export const obtenerDatosDashboard = async (req, res) => {
         });
         const idsTodasLasInstituciones = todasLasInstituciones.map(i => i.id);
 
-        // Modificar filtros de institución - AHORA NO DEPENDE DEL SEMESTRE
+        // Modificar filtros de institución
         const filtrosInstitucion = institucionId
             ? { institucion_id: institucionId }
             : {}; // Sin restricción por tipo de institución

@@ -157,7 +157,7 @@ export const agregarReceptor = async (req, res) => {
   export const actualizarReceptor = async (req, res) => {
     try {
       const { receptor_id } = req.params;
-      const { nombre, cargo, estado } = req.body; // Asegúrate de incluir estado
+      const { nombre, cargo, estado } = req.body;
   
       const receptor = await Receptor.findByPk(receptor_id);
       if (!receptor) {
@@ -167,7 +167,7 @@ export const agregarReceptor = async (req, res) => {
       await receptor.update({
         nombre,
         cargo,
-        estado: estado !== undefined ? estado : receptor.estado // Actualiza el estado si se proporciona
+        estado: estado !== undefined ? estado : receptor.estado
       });
   
       res.json(receptor);
@@ -186,8 +186,7 @@ export const agregarReceptor = async (req, res) => {
         return res.status(404).json({ error: 'Receptor no encontrado' });
       }
   
-      // Cambiar el estado del receptor
-      receptor.estado = !receptor.estado; // Cambia el estado
+      receptor.estado = !receptor.estado;
       await receptor.save();
   
       res.json({
