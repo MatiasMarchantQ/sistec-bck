@@ -15,7 +15,7 @@ NutricionVisita.init({
         allowNull: false
     },
     cantidad_comidas: {
-        type: DataTypes.STRING(100),
+        type: DataTypes.STRING(500),
         allowNull: true
     },
     consumo_habitual: {
