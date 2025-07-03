@@ -144,7 +144,7 @@ PacienteDependencia.init({
         allowNull: true
     },
     factores_riesgo_familiar: {
-        type: DataTypes.STRING(200),
+        type: DataTypes.STRING(500),
         allowNull: true
     },
     telefono_1: {
